@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BookCard } from "@/components/book-card";
 import { AddBookDialog } from "@/components/add-book-dialog";
+import { BulkUploadDialog } from "@/components/bulk-upload-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -90,6 +91,16 @@ export default function Library() {
     console.log("Book added to library:", book);
   };
 
+  const handleBulkUpload = (newBooks: any[]) => {
+    const booksWithIds = newBooks.map(book => ({
+      ...book,
+      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+      currentPage: book.currentPage || 0,
+    }));
+    setBooks(prev => [...prev, ...booksWithIds]);
+    console.log(`Bulk uploaded ${booksWithIds.length} books to library`);
+  };
+
   const handleStartReading = (id: string) => {
     setBooks(prev => prev.map(book => 
       book.id === id 
@@ -115,7 +126,10 @@ export default function Library() {
             {books.length} books in your collection
           </p>
         </div>
-        <AddBookDialog onAddBook={handleAddBook} />
+        <div className="flex gap-2">
+          <BulkUploadDialog onBulkUpload={handleBulkUpload} />
+          <AddBookDialog onAddBook={handleAddBook} />
+        </div>
       </div>
 
       <div className="flex gap-4 items-center">

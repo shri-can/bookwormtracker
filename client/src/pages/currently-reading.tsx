@@ -4,8 +4,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BookOpen, Clock, Target } from "lucide-react";
 
-// todo: remove mock functionality
-const mockCurrentlyReading = [
+interface ReadingSession {
+  id: string;
+  startPage: number;
+  endPage: number;
+  sessionDate: string;
+  notes?: string;
+}
+
+interface BookWithSessions {
+  id: string;
+  title: string;
+  author: string;
+  genre: string;
+  totalPages: number;
+  currentPage: number;
+  startedAt: string;
+  isCurrentlyReading: boolean;
+  sessions?: ReadingSession[];
+}
+
+// todo: remove mock functionality  
+const mockCurrentlyReading: BookWithSessions[] = [
   {
     id: "1",
     title: "Clean Code",
@@ -46,6 +66,25 @@ export default function CurrentlyReading() {
       book.id === id ? { ...book, currentPage: newPage } : book
     ));
     console.log(`Updated progress for book ${id} to page ${newPage}`);
+  };
+
+  const handleAddSession = (id: string, session: { startPage: number; endPage: number; notes?: string }) => {
+    setBooks(prev => prev.map(book => {
+      if (book.id === id) {
+        const newSession = {
+          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+          ...session,
+          sessionDate: new Date().toISOString(),
+        };
+        return {
+          ...book,
+          sessions: [...(book.sessions || []), newSession],
+          currentPage: Math.max(book.currentPage, session.endPage)
+        };
+      }
+      return book;
+    }));
+    console.log(`Added reading session for book ${id}: pages ${session.startPage}-${session.endPage}`);
   };
 
   const totalPages = books.reduce((sum, book) => sum + book.totalPages, 0);
@@ -139,6 +178,7 @@ export default function CurrentlyReading() {
                   key={book.id}
                   {...book}
                   onUpdateProgress={handleUpdateProgress}
+                  onAddSession={handleAddSession}
                 />
               ))}
             </div>

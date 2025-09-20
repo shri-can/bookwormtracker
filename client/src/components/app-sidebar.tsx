@@ -9,6 +9,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 
 const navigation = [
@@ -36,6 +37,13 @@ const navigation = [
 
 export function AppSidebar() {
   const [location] = useLocation();
+  const { setOpenMobile } = useSidebar();
+
+  const handleNavClick = () => {
+    // Auto-minimize sidebar on mobile/small screens
+    setOpenMobile(false);
+    console.log("Navigation clicked, sidebar minimized");
+  };
 
   return (
     <Sidebar>
@@ -47,7 +55,11 @@ export function AppSidebar() {
               {navigation.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild data-active={location === item.url}>
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <Link 
+                      href={item.url} 
+                      onClick={handleNavClick}
+                      data-testid={`link-${item.title.toLowerCase().replace(/\s+/g, '-')}`}
+                    >
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
