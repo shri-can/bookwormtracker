@@ -27,7 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Plus } from "lucide-react";
+import { BookSearchInput } from "./book-search-input";
+import { Plus, Sparkles } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -68,6 +69,7 @@ interface AddBookDialogProps {
 export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasAutoFetched, setHasAutoFetched] = useState(false);
 
   const form = useForm<AddBookForm>({
     resolver: zodResolver(addBookSchema),
@@ -82,6 +84,32 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
     },
   });
 
+  const handleBookSelect = (bookData: {
+    title: string;
+    author: string;
+    genre: string;
+    totalPages?: number;
+    publishYear?: number;
+  }) => {
+    // Auto-populate form fields with fetched book data
+    form.setValue("title", bookData.title);
+    form.setValue("author", bookData.author);
+    if (bookData.genre) {
+      form.setValue("genre", bookData.genre);
+    }
+    if (bookData.totalPages) {
+      form.setValue("totalPages", bookData.totalPages);
+    }
+    
+    setHasAutoFetched(true);
+    console.log("Auto-populated form with book data:", bookData);
+  };
+
+  const resetForm = () => {
+    form.reset();
+    setHasAutoFetched(false);
+  };
+
   const onSubmit = async (data: AddBookForm) => {
     setIsSubmitting(true);
     console.log("Adding book:", data);
@@ -90,7 +118,7 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
     await new Promise(resolve => setTimeout(resolve, 1000));
     
     onAddBook?.(data);
-    form.reset();
+    resetForm();
     setIsOpen(false);
     setIsSubmitting(false);
   };
@@ -103,15 +131,31 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      setIsOpen(open);
+      if (!open) {
+        resetForm();
+      }
+    }}>
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]" data-testid="dialog-add-book">
         <DialogHeader>
-          <DialogTitle>Add New Book</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            Add New Book
+            {hasAutoFetched && (
+              <div className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+                <Sparkles className="h-4 w-4" />
+                <span>Details fetched</span>
+              </div>
+            )}
+          </DialogTitle>
           <DialogDescription>
-            Add a book to your library. Set it as currently reading to track your progress.
+            {hasAutoFetched 
+              ? "Book details have been automatically filled. Review and adjust as needed."
+              : "Start typing a book title to search and auto-fill details, or enter manually."
+            }
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -123,7 +167,13 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
-                    <Input placeholder="Enter book title" {...field} data-testid="input-book-title" />
+                    <BookSearchInput
+                      value={field.value}
+                      onChange={field.onChange}
+                      onBookSelect={handleBookSelect}
+                      placeholder="Start typing to search for books..."
+                      data-testid="input-book-title"
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
