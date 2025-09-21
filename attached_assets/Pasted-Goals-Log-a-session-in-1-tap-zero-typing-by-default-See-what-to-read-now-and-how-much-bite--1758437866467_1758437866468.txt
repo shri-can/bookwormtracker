@@ -1,0 +1,70 @@
+Goals
+	•	Log a session in 1 tap; zero typing by default.
+	•	See what to read now and how much (bite target + ETA).
+	•	Capture a quick note/quote without breaking flow.
+	•	Work offline; sync later. 	•	Sessions, progress and current page remain synced as they are now
+
+Layout (top → bottom)
+	1.	Book switcher (only if >1 active)
+Horizontal chips/cards: Cover • Title • % done. Tap to switch active book.
+	2.	Session card (hero)
+	•	Title, author, cover, progress bar.
+	•	Primary button: Start (idle) / Pause / Resume / Stop.
+	•	Page chips: +5 / +10 / +25 (visible when stopped or for quick add).
+	•	Progress input (collapsed): Start page, End page (auto-filled; editable).
+	•	Mini stats row: Today’s target: 12 pages • ETA: Sun, 29 Sep • Pace: 28 pph.
+	3.	Quick actions row
+	•	+ Note  + Highlight/Quote  Bookmark page  Timer 25:00 (Pomodoro opt-in).
+Collapsible; default closed when a session is active.
+	4.	Recent sessions (collapsible)
+Today → Yesterday → This week. Inline edit for pages/time; swipe to delete (Undo).
+	5.	Nudges (subtle)
+If idle 2 days on an active book: “Read 10 pages to finish by Thu.” (dismissible).
+
+Core flows
+	•	Start:
+	•	Prefill startPage = last endPage.
+	•	Start timer; state → active.
+	•	If ebook/audio mode, track by time/percent instead of pages.
+	•	Stop:
+	•	Auto-calc endPage = startPage + pagesFromChips (or ask if blank).
+	•	Save session {startAt, endAt, startPage, endPage, duration}.
+	•	Update book.progress and lastReadAt.
+	•	Pause/Resume:
+	•	Multiple pauses accumulate into one session (keep a single sessionId until Stop).
+	•	Quick add (no timer):
+	•	Tap +10 → quick session with duration = null, pages=10.
+	•	Notes/Quotes:
+	•	+ Note opens inline editor with optional page.
+	•	+ Quote supports paste or camera OCR later; for now, plain text.  Forecasts (simple + good)
+	•	Pages/hour = rolling average of last 5 sessions for this book; fall back to global average.
+	•	ETA = (pageCount - currentPage) / pph, converted to date.
+	•	Today’s target (bite) = pages to finish by chosen deadline (or pph × availableMinutesToday if you prefer time-based target).
+	•	Always show conservative ranges if <3 sessions exist.
+Edge cases & rules
+	•	Unknown pageCount: hide ETA; show time-based target instead.
+	•	Audio/Ebook: switch to time/percentage mode (no page chips). Allow manual “current chapter/percent”.
+	•	Stop with no pages: prompt “Log 0 pages?” (sometimes you just took notes).
+	•	Midnight sessions: split across days for daily stats, but keep one session record (computed views can split).
+	•	Offline: queue start/pause/stop/quick in an outbox; show “Syncing…” when back online.
+
+Performance & UX polish
+	•	Single hero card; everything else collapsible (progressive disclosure).
+	•	44px tap targets; persistent state in URL (bookId) so reload preserves context.
+	•	Optimistic UI for quick adds; toasts with Undo on delete/edits.
+	•	IST by default (your local TZ); timestamps stored UTC.
+
+Acceptance criteria (sanity checklist)
+	•	Start → Pause → Resume → Stop logs exactly one session with correct duration.
+	•	Quick +10 instantly creates a session and updates progress without timer.
+	•	StartPage auto-fills from last endPage.
+	•	ETA shows within 3 sessions; falls back to range when little data.
+	•	Multiple active books are switchable in ≤2 taps.
+	•	Offline: can start/stop; data appears after reconnection; no duplicates.
+	•	Keyboard shortcuts work; screen usable fully with keyboard.
+
+Later (optional)
+	•	Pomodoro with auto-stop → endPage prompt.
+	•	“Session Summary” toast: pace vs. average, tiny confetti when a book finishes.
+	•	Camera OCR for quotes (Tesseract.js), behind a toggle.
+	•	Per-book reminders (implementation intentions: time + tiny bite).

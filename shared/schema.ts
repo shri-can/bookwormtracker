@@ -29,13 +29,89 @@ export const books = pgTable("books", {
   coverUrl: text("cover_url"),
 });
 
+// Enhanced reading sessions with state management and timer support
 export const readingSessions = pgTable("reading_sessions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   bookId: varchar("book_id").notNull().references(() => books.id),
-  startPage: integer("start_page").notNull(),
-  endPage: integer("end_page").notNull(),
+  
+  // Session timing
+  startedAt: timestamp("started_at").notNull(),
+  pausedAt: timestamp("paused_at"),
+  resumedAt: timestamp("resumed_at"),
+  endedAt: timestamp("ended_at"),
+  duration: integer("duration"), // Total reading time in minutes
+  
+  // Progress tracking
+  startPage: integer("start_page"),
+  endPage: integer("end_page"),
+  pagesRead: integer("pages_read").default(0),
+  progressPercent: real("progress_percent"), // For ebooks/audio
+  
+  // Session state and metadata
+  state: text("state").notNull().default("completed"), // 'active'|'paused'|'completed'
+  sessionType: text("session_type").default("timed"), // 'timed'|'quick'
+  pomodoroMinutes: integer("pomodoro_minutes"), // Optional Pomodoro duration
+  
+  // Context
   sessionDate: timestamp("session_date").notNull().default(sql`CURRENT_TIMESTAMP`),
-  notes: text("notes"),
+  timeZone: text("time_zone").default("UTC"),
+  deviceType: text("device_type"), // For offline sync context
+  
+  // Quick notes during session
+  sessionNotes: text("session_notes"),
+  
+  // Sync status for offline support
+  syncStatus: text("sync_status").default("synced"), // 'pending'|'syncing'|'synced'|'failed'
+  localId: text("local_id"), // For offline session management
+});
+
+// Standalone notes and highlights
+export const bookNotes = pgTable("book_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  bookId: varchar("book_id").notNull().references(() => books.id),
+  sessionId: varchar("session_id").references(() => readingSessions.id),
+  
+  // Content
+  content: text("content").notNull(),
+  noteType: text("note_type").notNull().default("note"), // 'note'|'quote'|'highlight'
+  
+  // Location context
+  page: integer("page"),
+  chapter: text("chapter"),
+  position: text("position"), // For ebooks: chapter.paragraph.sentence
+  
+  // Metadata
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  tags: text("tags").array().default([]),
+  isPrivate: boolean("is_private").default(false),
+  
+  // OCR/source tracking (for future camera quotes)
+  sourceImage: text("source_image_url"),
+  ocrConfidence: real("ocr_confidence"),
+});
+
+// Book reading state for active session management
+export const bookReadingState = pgTable("book_reading_state", {
+  bookId: varchar("book_id").primaryKey().references(() => books.id),
+  
+  // Current session info
+  activeSessionId: varchar("active_session_id").references(() => readingSessions.id),
+  lastSessionAt: timestamp("last_session_at"),
+  
+  // Reading pace and forecasting
+  averagePagesPerHour: real("average_pages_per_hour"),
+  recentSessionsCount: integer("recent_sessions_count").default(0),
+  lastCalculatedAt: timestamp("last_calculated_at"),
+  
+  // Daily reading targets
+  dailyPageTarget: integer("daily_page_target"),
+  targetDeadline: timestamp("target_deadline"),
+  estimatedFinishDate: timestamp("estimated_finish_date"),
+  
+  // Nudging and reminders  
+  lastNudgeAt: timestamp("last_nudge_at"),
+  nudgeDismissedAt: timestamp("nudge_dismissed_at"),
+  reminderSettings: text("reminder_settings"), // JSON for time + bite preferences
 });
 
 // Define the fixed genre options
@@ -67,9 +143,41 @@ export const BOOK_FORMATS = [
   "audio"
 ] as const;
 
+// Define session states
+export const SESSION_STATES = [
+  "active",
+  "paused", 
+  "completed"
+] as const;
+
+// Define session types
+export const SESSION_TYPES = [
+  "timed",
+  "quick"
+] as const;
+
+// Define note types
+export const NOTE_TYPES = [
+  "note",
+  "quote",
+  "highlight"
+] as const;
+
+// Define sync statuses
+export const SYNC_STATUSES = [
+  "pending",
+  "syncing",
+  "synced",
+  "failed"
+] as const;
+
 export const genreEnum = z.enum(BOOK_GENRES);
 export const statusEnum = z.enum(BOOK_STATUSES);
 export const formatEnum = z.enum(BOOK_FORMATS);
+export const sessionStateEnum = z.enum(SESSION_STATES);
+export const sessionTypeEnum = z.enum(SESSION_TYPES);
+export const noteTypeEnum = z.enum(NOTE_TYPES);
+export const syncStatusEnum = z.enum(SYNC_STATUSES);
 
 export const insertBookSchema = createInsertSchema(books).omit({
   id: true,
@@ -87,12 +195,89 @@ export const insertBookSchema = createInsertSchema(books).omit({
 
 export const updateBookSchema = insertBookSchema.partial();
 
+// Reading session schemas
 export const insertReadingSessionSchema = createInsertSchema(readingSessions).omit({
   id: true,
+  sessionDate: true, // Auto-generated
+}).extend({
+  state: sessionStateEnum.default("completed"),
+  sessionType: sessionTypeEnum.default("timed"),
+  syncStatus: syncStatusEnum.default("synced"),
+  duration: z.number().int().min(0).optional(),
+  pagesRead: z.number().int().min(0).default(0),
+  progressPercent: z.number().min(0).max(1).optional(),
+  pomodoroMinutes: z.number().int().min(5).max(120).optional(),
 });
 
+export const updateReadingSessionSchema = insertReadingSessionSchema.partial();
+
+// Note schemas
+export const insertBookNoteSchema = createInsertSchema(bookNotes).omit({
+  id: true,
+  createdAt: true, // Auto-generated
+}).extend({
+  noteType: noteTypeEnum.default("note"),
+  content: z.string().min(1).max(5000),
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
+  page: z.number().int().min(1).optional(),
+  ocrConfidence: z.number().min(0).max(1).optional(),
+});
+
+export const updateBookNoteSchema = insertBookNoteSchema.partial();
+
+// Reading state schemas
+export const insertBookReadingStateSchema = createInsertSchema(bookReadingState).omit({
+  lastCalculatedAt: true, // Auto-updated
+}).extend({
+  averagePagesPerHour: z.number().min(0).optional(),
+  recentSessionsCount: z.number().int().min(0).default(0),
+  dailyPageTarget: z.number().int().min(1).optional(),
+});
+
+export const updateBookReadingStateSchema = insertBookReadingStateSchema.partial();
+
+// Session action schemas for API endpoints
+export const startSessionSchema = z.object({
+  bookId: z.string().uuid(),
+  startPage: z.number().int().min(0).optional(),
+  pomodoroMinutes: z.number().int().min(5).max(120).optional(),
+});
+
+export const pauseSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+});
+
+export const stopSessionSchema = z.object({
+  sessionId: z.string().uuid(),
+  endPage: z.number().int().min(0).optional(),
+  sessionNotes: z.string().max(1000).optional(),
+});
+
+export const quickAddPagesSchema = z.object({
+  bookId: z.string().uuid(),
+  pagesRead: z.number().int().min(1).max(100),
+  sessionNotes: z.string().max(500).optional(),
+});
+
+// Type exports
 export type InsertBook = z.infer<typeof insertBookSchema>;
 export type UpdateBook = z.infer<typeof updateBookSchema>;
 export type Book = typeof books.$inferSelect;
+
 export type ReadingSession = typeof readingSessions.$inferSelect;
 export type InsertReadingSession = z.infer<typeof insertReadingSessionSchema>;
+export type UpdateReadingSession = z.infer<typeof updateReadingSessionSchema>;
+
+export type BookNote = typeof bookNotes.$inferSelect;
+export type InsertBookNote = z.infer<typeof insertBookNoteSchema>;
+export type UpdateBookNote = z.infer<typeof updateBookNoteSchema>;
+
+export type BookReadingState = typeof bookReadingState.$inferSelect;
+export type InsertBookReadingState = z.infer<typeof insertBookReadingStateSchema>;
+export type UpdateBookReadingState = z.infer<typeof updateBookReadingStateSchema>;
+
+// Action type exports
+export type StartSessionRequest = z.infer<typeof startSessionSchema>;
+export type PauseSessionRequest = z.infer<typeof pauseSessionSchema>;
+export type StopSessionRequest = z.infer<typeof stopSessionSchema>;
+export type QuickAddPagesRequest = z.infer<typeof quickAddPagesSchema>;

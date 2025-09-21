@@ -1,7 +1,21 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, type BookFilters } from "./storage";
-import { insertBookSchema, updateBookSchema, statusEnum } from "@shared/schema";
+import { 
+  insertBookSchema, 
+  updateBookSchema, 
+  statusEnum,
+  insertReadingSessionSchema,
+  updateReadingSessionSchema,
+  insertBookNoteSchema,
+  updateBookNoteSchema,
+  insertBookReadingStateSchema,
+  updateBookReadingStateSchema,
+  startSessionSchema,
+  pauseSessionSchema,
+  stopSessionSchema,
+  quickAddPagesSchema
+} from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -181,6 +195,374 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching books by status:", error);
       res.status(500).json({ error: "Failed to fetch books by status" });
+    }
+  });
+
+  // ========== SESSION MANAGEMENT ROUTES ==========
+
+  // Session workflow operations
+  
+  // Start a new reading session
+  app.post("/api/sessions/start", async (req, res) => {
+    try {
+      const validatedData = startSessionSchema.parse(req.body);
+      const session = await storage.startSession(validatedData);
+      res.status(201).json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid session data", details: error.errors });
+      }
+      if (error instanceof Error && error.message.includes("already has an active session")) {
+        return res.status(409).json({ error: error.message });
+      }
+      console.error("Error starting session:", error);
+      res.status(500).json({ error: "Failed to start session" });
+    }
+  });
+
+  // Pause an active reading session
+  app.post("/api/sessions/:id/pause", async (req, res) => {
+    try {
+      const validatedData = pauseSessionSchema.parse({ sessionId: req.params.id, ...req.body });
+      const session = await storage.pauseSession(validatedData);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found or not active" });
+      }
+      res.json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid pause data", details: error.errors });
+      }
+      console.error("Error pausing session:", error);
+      res.status(500).json({ error: "Failed to pause session" });
+    }
+  });
+
+  // Resume a paused reading session
+  app.post("/api/sessions/:id/resume", async (req, res) => {
+    try {
+      const session = await storage.resumeSession(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found or not paused" });
+      }
+      res.json(session);
+    } catch (error) {
+      console.error("Error resuming session:", error);
+      res.status(500).json({ error: "Failed to resume session" });
+    }
+  });
+
+  // Stop a reading session
+  app.post("/api/sessions/:id/stop", async (req, res) => {
+    try {
+      const validatedData = stopSessionSchema.parse({ sessionId: req.params.id, ...req.body });
+      const session = await storage.stopSession(validatedData);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found or not active/paused" });
+      }
+      res.json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid stop data", details: error.errors });
+      }
+      console.error("Error stopping session:", error);
+      res.status(500).json({ error: "Failed to stop session" });
+    }
+  });
+
+  // Quick add pages without timer
+  app.post("/api/sessions/quick-add", async (req, res) => {
+    try {
+      const validatedData = quickAddPagesSchema.parse(req.body);
+      const session = await storage.quickAddPages(validatedData);
+      res.status(201).json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid quick add data", details: error.errors });
+      }
+      console.error("Error quick adding pages:", error);
+      res.status(500).json({ error: "Failed to quick add pages" });
+    }
+  });
+
+  // Session CRUD operations
+  
+  // Get a specific reading session
+  app.get("/api/sessions/:id", async (req, res) => {
+    try {
+      const session = await storage.getSession(req.params.id);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      console.error("Error fetching session:", error);
+      res.status(500).json({ error: "Failed to fetch session" });
+    }
+  });
+
+  // Get sessions for a book
+  app.get("/api/books/:bookId/sessions", async (req, res) => {
+    try {
+      const filters: any = {};
+      
+      if (req.query.state) filters.state = req.query.state;
+      if (req.query.sessionType) filters.sessionType = req.query.sessionType;
+      if (req.query.limit) filters.limit = parseInt(req.query.limit as string);
+      
+      if (req.query.startDate && req.query.endDate) {
+        filters.dateRange = {
+          start: new Date(req.query.startDate as string),
+          end: new Date(req.query.endDate as string)
+        };
+      }
+
+      const sessions = await storage.getSessionsByBook(req.params.bookId, filters);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching book sessions:", error);
+      res.status(500).json({ error: "Failed to fetch book sessions" });
+    }
+  });
+
+  // Get recent sessions across all books
+  app.get("/api/sessions/recent", async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
+      const sessions = await storage.getRecentSessions(limit);
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching recent sessions:", error);
+      res.status(500).json({ error: "Failed to fetch recent sessions" });
+    }
+  });
+
+  // Get active session for a book
+  app.get("/api/books/:bookId/active-session", async (req, res) => {
+    try {
+      const session = await storage.getActiveSession(req.params.bookId);
+      res.json(session);
+    } catch (error) {
+      console.error("Error fetching active session:", error);
+      res.status(500).json({ error: "Failed to fetch active session" });
+    }
+  });
+
+  // Get all active sessions
+  app.get("/api/sessions/active", async (req, res) => {
+    try {
+      const sessions = await storage.getAllActiveSessions();
+      res.json(sessions);
+    } catch (error) {
+      console.error("Error fetching active sessions:", error);
+      res.status(500).json({ error: "Failed to fetch active sessions" });
+    }
+  });
+
+  // Update a reading session
+  app.patch("/api/sessions/:id", async (req, res) => {
+    try {
+      const validatedData = updateReadingSessionSchema.parse(req.body);
+      const session = await storage.updateSession(req.params.id, validatedData);
+      if (!session) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      res.json(session);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid session update data", details: error.errors });
+      }
+      console.error("Error updating session:", error);
+      res.status(500).json({ error: "Failed to update session" });
+    }
+  });
+
+  // Delete a reading session
+  app.delete("/api/sessions/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteSession(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Session not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting session:", error);
+      res.status(500).json({ error: "Failed to delete session" });
+    }
+  });
+
+  // ========== NOTES AND QUOTES ROUTES ==========
+
+  // Get a specific note
+  app.get("/api/notes/:id", async (req, res) => {
+    try {
+      const note = await storage.getNote(req.params.id);
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      res.json(note);
+    } catch (error) {
+      console.error("Error fetching note:", error);
+      res.status(500).json({ error: "Failed to fetch note" });
+    }
+  });
+
+  // Get notes for a book
+  app.get("/api/books/:bookId/notes", async (req, res) => {
+    try {
+      const notes = await storage.getNotesByBook(req.params.bookId);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching book notes:", error);
+      res.status(500).json({ error: "Failed to fetch book notes" });
+    }
+  });
+
+  // Get notes for a session
+  app.get("/api/sessions/:sessionId/notes", async (req, res) => {
+    try {
+      const notes = await storage.getNotesBySession(req.params.sessionId);
+      res.json(notes);
+    } catch (error) {
+      console.error("Error fetching session notes:", error);
+      res.status(500).json({ error: "Failed to fetch session notes" });
+    }
+  });
+
+  // Create a new note
+  app.post("/api/notes", async (req, res) => {
+    try {
+      const validatedData = insertBookNoteSchema.parse(req.body);
+      const note = await storage.createNote(validatedData);
+      res.status(201).json(note);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid note data", details: error.errors });
+      }
+      console.error("Error creating note:", error);
+      res.status(500).json({ error: "Failed to create note" });
+    }
+  });
+
+  // Update a note
+  app.patch("/api/notes/:id", async (req, res) => {
+    try {
+      const validatedData = updateBookNoteSchema.parse(req.body);
+      const note = await storage.updateNote(req.params.id, validatedData);
+      if (!note) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      res.json(note);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid note update data", details: error.errors });
+      }
+      console.error("Error updating note:", error);
+      res.status(500).json({ error: "Failed to update note" });
+    }
+  });
+
+  // Delete a note
+  app.delete("/api/notes/:id", async (req, res) => {
+    try {
+      const deleted = await storage.deleteNote(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting note:", error);
+      res.status(500).json({ error: "Failed to delete note" });
+    }
+  });
+
+  // ========== READING STATE AND PROGRESS ROUTES ==========
+
+  // Get reading state for a book
+  app.get("/api/books/:bookId/reading-state", async (req, res) => {
+    try {
+      const readingState = await storage.getReadingState(req.params.bookId);
+      res.json(readingState);
+    } catch (error) {
+      console.error("Error fetching reading state:", error);
+      res.status(500).json({ error: "Failed to fetch reading state" });
+    }
+  });
+
+  // Update reading state for a book
+  app.patch("/api/books/:bookId/reading-state", async (req, res) => {
+    try {
+      const validatedData = updateBookReadingStateSchema.parse(req.body);
+      const readingState = await storage.updateReadingState(req.params.bookId, validatedData);
+      res.json(readingState);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid reading state data", details: error.errors });
+      }
+      console.error("Error updating reading state:", error);
+      res.status(500).json({ error: "Failed to update reading state" });
+    }
+  });
+
+  // Calculate and get progress forecast for a book
+  app.post("/api/books/:bookId/calculate-progress", async (req, res) => {
+    try {
+      const forecast = await storage.calculateProgress(req.params.bookId);
+      res.json(forecast);
+    } catch (error) {
+      console.error("Error calculating progress:", error);
+      res.status(500).json({ error: "Failed to calculate progress" });
+    }
+  });
+
+  // Update book progress (page or percentage)
+  app.patch("/api/books/:bookId/progress", async (req, res) => {
+    try {
+      const { currentPage, progressPercent } = req.body;
+      
+      if (currentPage === undefined && progressPercent === undefined) {
+        return res.status(400).json({ error: "Either currentPage or progressPercent must be provided" });
+      }
+      
+      const book = await storage.updateBookProgress(req.params.bookId, currentPage, progressPercent);
+      if (!book) {
+        return res.status(404).json({ error: "Book not found" });
+      }
+      res.json(book);
+    } catch (error) {
+      console.error("Error updating book progress:", error);
+      res.status(500).json({ error: "Failed to update book progress" });
+    }
+  });
+
+  // ========== ANALYTICS AND STATS ROUTES ==========
+
+  // Get reading statistics for a book
+  app.get("/api/books/:bookId/stats", async (req, res) => {
+    try {
+      const stats = await storage.getReadingStats(req.params.bookId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching reading stats:", error);
+      res.status(500).json({ error: "Failed to fetch reading stats" });
+    }
+  });
+
+  // Get daily reading statistics
+  app.get("/api/stats/daily", async (req, res) => {
+    try {
+      const dateParam = req.query.date as string;
+      const date = dateParam ? new Date(dateParam) : new Date();
+      
+      if (isNaN(date.getTime())) {
+        return res.status(400).json({ error: "Invalid date format" });
+      }
+      
+      const stats = await storage.getDailyReadingStats(date);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching daily stats:", error);
+      res.status(500).json({ error: "Failed to fetch daily stats" });
     }
   });
 
