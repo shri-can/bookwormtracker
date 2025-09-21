@@ -46,8 +46,8 @@ export class MemStorage implements IStorage {
         books = books.filter(book => 
           book.title.toLowerCase().includes(searchLower) ||
           book.author.toLowerCase().includes(searchLower) ||
-          book.topics.some(topic => topic.toLowerCase().includes(searchLower)) ||
-          book.tags.some(tag => tag.toLowerCase().includes(searchLower))
+          (book.topics || []).some(topic => topic.toLowerCase().includes(searchLower)) ||
+          (book.tags || []).some(tag => tag.toLowerCase().includes(searchLower))
         );
       }
 
@@ -64,18 +64,18 @@ export class MemStorage implements IStorage {
       // Apply tags filter
       if (filters.tags && filters.tags.length > 0) {
         books = books.filter(book => 
-          filters.tags!.some(tag => book.tags.includes(tag))
+          filters.tags!.some(tag => (book.tags || []).includes(tag))
         );
       }
 
       // Apply format filter
       if (filters.formats && filters.formats.length > 0) {
-        books = books.filter(book => filters.formats!.includes(book.format));
+        books = books.filter(book => book.format && filters.formats!.includes(book.format));
       }
 
       // Apply language filter
       if (filters.languages && filters.languages.length > 0) {
-        books = books.filter(book => filters.languages!.includes(book.language));
+        books = books.filter(book => book.language && filters.languages!.includes(book.language));
       }
 
       // Apply sorting
@@ -156,7 +156,9 @@ export class MemStorage implements IStorage {
     for (const id of ids) {
       const book = this.books.get(id);
       if (book) {
-        const newTags = [...new Set([...book.tags, ...tags])]; // Deduplicate
+        const existingTags = book.tags || [];
+        const combinedTags = [...existingTags, ...tags];
+        const newTags = Array.from(new Set(combinedTags)); // Deduplicate
         const updatedBook = { ...book, tags: newTags };
         this.books.set(id, updatedBook);
         updatedBooks.push(updatedBook);
