@@ -1,199 +1,609 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Clock, TrendingUp, Target, Award, Calendar } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { BookOpen, Clock, TrendingUp, Target, Award, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
-// todo: remove mock functionality
-const mockStats = {
-  totalBooks: 12,
-  booksRead: 7,
-  currentlyReading: 3,
-  totalPages: 3840,
-  pagesRead: 2156,
-  averagePagesPerDay: 23.5,
-  readingStreak: 15,
-  favoriteGenres: [
-    { genre: "Programming", count: 4, percentage: 33 },
-    { genre: "Business", count: 3, percentage: 25 },
-    { genre: "Psychology", count: 2, percentage: 17 },
-    { genre: "Design", count: 2, percentage: 17 },
-    { genre: "History", count: 1, percentage: 8 },
-  ],
-  monthlyGoal: {
-    target: 4,
-    completed: 2,
-    progress: 50,
-  },
-  recentAchievements: [
-    { title: "Speed Reader", description: "Read 50 pages in one day", earned: "2 days ago" },
-    { title: "Consistency Master", description: "Read for 7 consecutive days", earned: "1 week ago" },
-    { title: "Genre Explorer", description: "Read books from 5 different genres", earned: "2 weeks ago" },
-  ],
-};
+interface StatsOverviewResponse {
+  totals: {
+    pages: number;
+    minutes: number;
+    sessions: number;
+  };
+  goals: {
+    targetPages: number;
+    targetMinutes: number;
+    biteTargetPerDay: number;
+  };
+  streak: {
+    current: number;
+    best: number;
+  };
+  finishedBooks: Array<{
+    id: number;
+    title: string;
+    daysToFinish: number;
+    avgPph: number;
+  }>;
+  activeEtas: Array<{
+    bookId: number;
+    title: string;
+    progressPct: number;
+    etaDate: string | null;
+    bitePages: number;
+  }>;
+  sparkline: Array<{
+    date: string;
+    pages: number;
+  }>;
+  heatmap: Array<{
+    date: string;
+    pages: number;
+    minutes: number;
+  }>;
+  range: {
+    from: string;
+    to: string;
+  };
+}
 
-export default function Stats() {
-  const { 
-    totalBooks, 
-    booksRead, 
-    currentlyReading, 
-    totalPages, 
-    pagesRead, 
-    averagePagesPerDay,
-    readingStreak,
-    favoriteGenres,
-    monthlyGoal,
-    recentAchievements
-  } = mockStats;
-
-  const readingProgress = (pagesRead / totalPages) * 100;
+function OverviewTab({ data }: { data: StatsOverviewResponse }) {
+  const { totals, goals, streak, finishedBooks, activeEtas, range } = data;
+  
+  // Calculate actual days in selected range
+  const fromDate = new Date(range.from);
+  const toDate = new Date(range.to);
+  const daysInRange = Math.max(1, Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  
+  const goalProgress = goals.targetPages > 0 ? Math.round((totals.pages / goals.targetPages) * 100) : 0;
+  const avgPagesPerDay = totals.pages / daysInRange;
 
   return (
-    <div className="space-y-6" data-testid="page-stats">
-      <div>
-        <h1 className="text-3xl font-serif font-semibold">Reading Statistics</h1>
-        <p className="text-muted-foreground mt-1">
-          Track your reading habits and achievements
-        </p>
-      </div>
-
+    <div className="space-y-6">
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card data-testid="card-total-books">
+        <Card data-testid="card-total-pages">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Books</CardTitle>
+            <CardTitle className="text-sm font-medium">Pages Read</CardTitle>
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-total-books">{totalBooks}</div>
+            <div className="text-2xl font-bold" data-testid="text-total-pages">{totals.pages.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">
-              {booksRead} completed, {currentlyReading} in progress
+              {totals.sessions} reading sessions
             </p>
           </CardContent>
         </Card>
 
-        <Card data-testid="card-pages-read">
+        <Card data-testid="card-reading-time">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pages Read</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-pages-read">{pagesRead.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">
-              {Math.round(readingProgress)}% of total pages
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-reading-pace">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Daily Average</CardTitle>
+            <CardTitle className="text-sm font-medium">Reading Time</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-daily-average">{averagePagesPerDay}</div>
+            <div className="text-2xl font-bold" data-testid="text-reading-time">
+              {Math.floor(totals.minutes / 60)}h {totals.minutes % 60}m
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {Math.round(totals.minutes / Math.max(1, totals.sessions))} min/session avg
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-daily-average">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Daily Average</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-daily-average">{avgPagesPerDay.toFixed(1)}</div>
             <p className="text-xs text-muted-foreground">
               Pages per day
             </p>
           </CardContent>
         </Card>
 
-        <Card data-testid="card-reading-streak">
+        <Card data-testid="card-current-streak">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reading Streak</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Current Streak</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="text-reading-streak">{readingStreak}</div>
+            <div className="text-2xl font-bold" data-testid="text-current-streak">{streak.current}</div>
             <p className="text-xs text-muted-foreground">
-              Consecutive days
+              Best: {streak.best} days
             </p>
           </CardContent>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Monthly Goal */}
-        <Card data-testid="card-monthly-goal">
+        {/* Reading Goal Progress */}
+        <Card data-testid="card-reading-goal">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Target className="h-5 w-5" />
-              Monthly Reading Goal
+              Reading Goal Progress
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-sm font-medium">Progress</span>
+              <span className="text-sm font-medium">Pages Goal</span>
               <span className="text-sm text-muted-foreground">
-                {monthlyGoal.completed} / {monthlyGoal.target} books
+                {totals.pages.toLocaleString()} / {goals.targetPages.toLocaleString()}
               </span>
             </div>
-            <Progress value={monthlyGoal.progress} className="h-3" data-testid="progress-monthly-goal" />
+            <Progress value={Math.min(100, goalProgress)} className="h-3" data-testid="progress-pages-goal" />
             <div className="text-center">
-              <div className="text-2xl font-bold" data-testid="text-monthly-progress">{monthlyGoal.progress}%</div>
+              <div className="text-2xl font-bold" data-testid="text-goal-progress">{goalProgress}%</div>
               <div className="text-sm text-muted-foreground">Complete</div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Daily target: {goals.biteTargetPerDay} pages
             </div>
           </CardContent>
         </Card>
 
-        {/* Favorite Genres */}
-        <Card data-testid="card-favorite-genres">
+        {/* Active Books ETAs */}
+        <Card data-testid="card-active-etas">
           <CardHeader>
-            <CardTitle>Favorite Genres</CardTitle>
+            <CardTitle>Currently Reading</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {activeEtas.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No books currently being read</p>
+            ) : (
+              <div className="space-y-3">
+                {activeEtas.slice(0, 3).map((book) => (
+                  <div key={book.bookId} className="space-y-2">
+                    <div className="flex justify-between items-start">
+                      <span className="text-sm font-medium line-clamp-1" data-testid={`text-active-book-${book.bookId}`}>
+                        {book.title}
+                      </span>
+                      <Badge variant="outline" data-testid={`badge-progress-${book.bookId}`}>
+                        {book.progressPct}%
+                      </Badge>
+                    </div>
+                    <Progress value={book.progressPct} className="h-2" data-testid={`progress-book-${book.bookId}`} />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>{book.bitePages} pages/day target</span>
+                      {book.etaDate && (
+                        <span data-testid={`text-eta-${book.bookId}`}>
+                          ETA: {format(new Date(book.etaDate), "MMM d")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent Finished Books */}
+      {finishedBooks.length > 0 && (
+        <Card data-testid="card-finished-books">
+          <CardHeader>
+            <CardTitle>Recently Finished</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {favoriteGenres.map((genre, index) => (
-                <div key={genre.genre} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium" data-testid={`text-genre-${index}`}>
-                      {genre.genre}
-                    </span>
-                    <Badge variant="outline" data-testid={`badge-genre-count-${index}`}>
-                      {genre.count}
-                    </Badge>
+              {finishedBooks.slice(0, 5).map((book) => (
+                <div key={book.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30" data-testid={`finished-book-${book.id}`}>
+                  <div className="flex-1">
+                    <div className="font-medium" data-testid={`finished-book-title-${book.id}`}>
+                      {book.title}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Finished in {book.daysToFinish} days • {book.avgPph.toFixed(1)} pages/hour avg
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 w-24">
-                    <Progress value={genre.percentage} className="h-2" data-testid={`progress-genre-${index}`} />
-                    <span className="text-xs text-muted-foreground w-8" data-testid={`text-genre-percentage-${index}`}>
-                      {genre.percentage}%
-                    </span>
-                  </div>
+                  <Badge variant="secondary" data-testid={`badge-days-${book.id}`}>
+                    {book.daysToFinish}d
+                  </Badge>
                 </div>
               ))}
             </div>
           </CardContent>
         </Card>
+      )}
+    </div>
+  );
+}
+
+function TrendsTab({ data }: { data: StatsOverviewResponse }) {
+  const { sparkline, heatmap } = data;
+
+  // Guard against empty or insufficient data
+  if (!sparkline || sparkline.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Card data-testid="card-no-data">
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              No data available for the selected range
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Calculate trend metrics with guards
+  const recentDays = sparkline.slice(-7);
+  const weekTotal = recentDays.length > 0 ? recentDays.reduce((sum, day) => sum + day.pages, 0) : 0;
+  const weekAvg = recentDays.length > 0 ? weekTotal / recentDays.length : 0;
+  
+  const prevWeekDays = sparkline.slice(-14, -7);
+  const prevWeekTotal = prevWeekDays.length > 0 ? prevWeekDays.reduce((sum, day) => sum + day.pages, 0) : 0;
+  const prevWeekAvg = prevWeekDays.length > 0 ? prevWeekTotal / prevWeekDays.length : 0;
+  
+  const weekTrend = prevWeekAvg > 0 ? ((weekAvg - prevWeekAvg) / prevWeekAvg) * 100 : 0;
+  
+  const maxPages = sparkline.length > 0 ? Math.max(0, ...sparkline.map(d => d.pages)) : 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Trend Summary */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card data-testid="card-week-total">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Week</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-week-total">{weekTotal}</div>
+            <p className="text-xs text-muted-foreground">
+              {weekAvg.toFixed(1)} pages/day avg
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-week-trend">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Week Trend</CardTitle>
+            <TrendingUp className={cn("h-4 w-4", weekTrend >= 0 ? "text-green-500" : "text-red-500")} />
+          </CardHeader>
+          <CardContent>
+            <div className={cn("text-2xl font-bold", weekTrend >= 0 ? "text-green-600" : "text-red-600")} data-testid="text-week-trend">
+              {weekTrend >= 0 ? '+' : ''}{weekTrend.toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              vs last week
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-best-day">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Best Day</CardTitle>
+            <Award className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="text-best-day">
+              {maxPages}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pages in one day
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Recent Achievements */}
-      <Card data-testid="card-achievements">
+      {/* Simple Sparkline Visualization */}
+      <Card data-testid="card-reading-chart">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Award className="h-5 w-5" />
-            Recent Achievements
-          </CardTitle>
+          <CardTitle>Daily Reading Pattern</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentAchievements.map((achievement, index) => (
-              <div key={index} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50" data-testid={`achievement-${index}`}>
-                <Award className="h-5 w-5 text-primary mt-0.5" />
-                <div className="flex-1">
-                  <div className="font-medium" data-testid={`achievement-title-${index}`}>
-                    {achievement.title}
-                  </div>
-                  <div className="text-sm text-muted-foreground" data-testid={`achievement-description-${index}`}>
-                    {achievement.description}
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-1" data-testid={`achievement-earned-${index}`}>
-                    Earned {achievement.earned}
-                  </div>
-                </div>
-              </div>
-            ))}
+            <div className="flex items-end justify-between h-32 gap-1" data-testid="sparkline-chart">
+              {sparkline.slice(-30).map((day, index) => {
+                const chartMaxPages = Math.max(1, maxPages);
+                const height = (day.pages / chartMaxPages) * 100;
+                return (
+                  <div
+                    key={day.date}
+                    className="bg-primary/20 hover:bg-primary/40 transition-colors flex-1 min-w-[2px] rounded-t"
+                    style={{ height: `${Math.max(2, height)}%` }}
+                    title={`${day.date}: ${day.pages} pages`}
+                    data-testid={`bar-${index}`}
+                  />
+                );
+              })}
+            </div>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>{sparkline.length > 30 ? format(new Date(sparkline[sparkline.length - 30].date), "MMM d") : format(new Date(sparkline[0]?.date || new Date()), "MMM d")}</span>
+              <span>Last 30 days</span>
+              <span>{format(new Date(sparkline[sparkline.length - 1]?.date || new Date()), "MMM d")}</span>
+            </div>
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function BreakdownTab({ data }: { data: StatsOverviewResponse }) {
+  const { finishedBooks, totals, goals, range } = data;
+  
+  // Calculate actual days in selected range
+  const fromDate = new Date(range.from);
+  const toDate = new Date(range.to);
+  const daysInRange = Math.max(1, Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+  return (
+    <div className="space-y-6">
+      {/* Detailed Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card data-testid="card-reading-efficiency">
+          <CardHeader>
+            <CardTitle>Reading Efficiency</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm">Pages per session</span>
+              <span className="font-medium" data-testid="text-pages-per-session">
+                {totals.sessions > 0 ? (totals.pages / totals.sessions).toFixed(1) : '0'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Minutes per page</span>
+              <span className="font-medium" data-testid="text-minutes-per-page">
+                {totals.pages > 0 ? (totals.minutes / totals.pages).toFixed(1) : '0'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Session frequency</span>
+              <span className="font-medium" data-testid="text-session-frequency">
+                {(totals.sessions / daysInRange).toFixed(1)}/day
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card data-testid="card-goal-breakdown">
+          <CardHeader>
+            <CardTitle>Goal Analysis</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex justify-between">
+              <span className="text-sm">Daily target</span>
+              <span className="font-medium" data-testid="text-daily-target">
+                {goals.biteTargetPerDay} pages
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Progress to goal</span>
+              <span className="font-medium" data-testid="text-goal-percentage">
+                {goals.targetPages > 0 ? Math.round((totals.pages / goals.targetPages) * 100) : 0}%
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-sm">Pages remaining</span>
+              <span className="font-medium" data-testid="text-pages-remaining">
+                {Math.max(0, goals.targetPages - totals.pages).toLocaleString()}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Detailed Finished Books List */}
+      <Card data-testid="card-all-finished-books">
+        <CardHeader>
+          <CardTitle>All Finished Books</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {finishedBooks.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No books finished in this period</p>
+          ) : (
+            <div className="space-y-3">
+              {finishedBooks.map((book, index) => (
+                <div key={book.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`detailed-book-${book.id}`}>
+                  <div className="flex-1">
+                    <div className="font-medium" data-testid={`detailed-book-title-${book.id}`}>
+                      {book.title}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Reading pace: {book.avgPph.toFixed(1)} pages/hour
+                    </div>
+                  </div>
+                  <div className="text-right space-y-1">
+                    <Badge variant="outline" data-testid={`detailed-badge-days-${book.id}`}>
+                      {book.daysToFinish} days
+                    </Badge>
+                    <div className="text-xs text-muted-foreground">
+                      #{index + 1} fastest
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+export default function Stats() {
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
+    from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
+    to: new Date(),
+  });
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  // Format dates for API query
+  const formatDate = (date: Date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const { data, isLoading, error } = useQuery<StatsOverviewResponse>({
+    queryKey: ['/api/stats/overview', formatDate(dateRange.from), formatDate(dateRange.to)],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        from: formatDate(dateRange.from),
+        to: formatDate(dateRange.to),
+      });
+      const response = await fetch(`/api/stats/overview?${params}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats');
+      }
+      return response.json();
+    },
+  });
+
+  if (error) {
+    return (
+      <div className="space-y-6" data-testid="page-stats">
+        <div>
+          <h1 className="text-3xl font-serif font-semibold">Reading Statistics</h1>
+          <p className="text-muted-foreground mt-1">
+            Track your reading habits and achievements
+          </p>
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              Failed to load statistics. Please try again later.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-testid="page-stats">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-serif font-semibold">Reading Statistics</h1>
+          <p className="text-muted-foreground mt-1">
+            Track your reading habits and achievements
+          </p>
+        </div>
+        
+        {/* Date Range Picker */}
+        <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-auto justify-start text-left font-normal" data-testid="button-date-range">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {format(dateRange.from, "MMM d")} - {format(dateRange.to, "MMM d")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="end">
+            <div className="p-3 space-y-3">
+              <div className="text-sm font-medium">Select date range</div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateRange({
+                      from: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+                      to: new Date(),
+                    });
+                    setCalendarOpen(false);
+                  }}
+                  data-testid="button-last-7-days"
+                >
+                  Last 7 days
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateRange({
+                      from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+                      to: new Date(),
+                    });
+                    setCalendarOpen(false);
+                  }}
+                  data-testid="button-last-30-days"
+                >
+                  Last 30 days
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setDateRange({
+                      from: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000),
+                      to: new Date(),
+                    });
+                    setCalendarOpen(false);
+                  }}
+                  data-testid="button-last-90-days"
+                >
+                  Last 90 days
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const now = new Date();
+                    const currentYear = now.getFullYear();
+                    setDateRange({
+                      from: new Date(currentYear, 0, 1),
+                      to: now,
+                    });
+                    setCalendarOpen(false);
+                  }}
+                  data-testid="button-this-year"
+                >
+                  This year
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-6">
+                  <div className="animate-pulse space-y-2">
+                    <div className="h-4 bg-muted rounded w-1/2"></div>
+                    <div className="h-8 bg-muted rounded w-3/4"></div>
+                    <div className="h-3 bg-muted rounded w-full"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      ) : data ? (
+        <Tabs defaultValue="overview" className="space-y-6" data-testid="tabs-stats">
+          <TabsList className="grid w-full grid-cols-3" data-testid="tabs-list">
+            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+            <TabsTrigger value="trends" data-testid="tab-trends">Trends</TabsTrigger>
+            <TabsTrigger value="breakdown" data-testid="tab-breakdown">Breakdown</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="overview" data-testid="tab-content-overview">
+            <OverviewTab data={data} />
+          </TabsContent>
+          
+          <TabsContent value="trends" data-testid="tab-content-trends">
+            <TrendsTab data={data} />
+          </TabsContent>
+          
+          <TabsContent value="breakdown" data-testid="tab-content-breakdown">
+            <BreakdownTab data={data} />
+          </TabsContent>
+        </Tabs>
+      ) : null}
     </div>
   );
 }
