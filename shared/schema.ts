@@ -160,7 +160,9 @@ export const SESSION_TYPES = [
 export const NOTE_TYPES = [
   "note",
   "quote",
-  "highlight"
+  "highlight",
+  "summary",
+  "action"
 ] as const;
 
 // Define sync statuses

@@ -1,0 +1,89 @@
+Objectives
+	•	Add a note in ≤3 taps.
+	•	Auto-link notes to book + page without typing.
+	•	Turn any note into a recall prompt (optional).
+	•	Fast search/filter on a phone; works offline.
+
+Layout (top → bottom)
+	1.	Sticky header
+	•	Search field (placeholder: “Search notes, quotes, tags”)
+	•	Filter chips (scrollable): Book, Type, Tag, Has image, Date
+	•	“+” button → opens Quick Capture sheet
+	2.	Quick Capture (collapsible inline, also a bottom sheet)
+	•	Note input (1 line grows)
+	•	Book selector (defaults to active Currently Reading)
+	•	Page selector (pre-filled from book.currentPage; editable)
+	•	Type pills: Note / Quote / Highlight / Summary / Action
+	•	Toggles: Make Recall • Add Tag
+	•	Secondary actions row: Mic (dictate), Camera (OCR later), Clipboard (paste)
+	3.	Notes feed (virtualized list of cards)
+	•	Card shows: Type pill • Book + page • Timestamp • Text (2–4 lines) • Tags
+	•	Footer: Edit • Make Recall (if off) • … (Move, Copy link, Delete)
+	•	Swipe left: Delete (Undo) | Swipe right: Edit
+	4.	Bottom bar (optional)
+	•	“Today’s 5 to review” (opens Recall queue if you’re enabling recall)
+
+⸻
+
+Capture flows
+	•	1-tap from Currently Reading: on that screen, + Note opens Notes with Book + Page prefilled.
+	•	Quote mode: opens with a large text box + page; long press to add quotation marks; supports camera (image attached for OCR later).
+	•	Action mode: adds a tiny checkbox and optional due date (turns into a task; exportable).
+	•	Dictation: mic button uses browser speech-to-text (fallback to manual entry).
+	•	OCR (later): photo → stored as attachmentUrl; OCR runs async; recognized text appended below with a divider; you can confirm.
+
+⸻
+
+Filters & search (mobile)
+	•	Search is tolerant: matches text, tags, book title/author, page numbers.
+	•	Chips (multi-select):
+	•	Book (most recent 5 + “All…” to pick more)
+	•	Type (Note/Quote/Highlight/Summary/Action)
+	•	Tags (top 10 by frequency + “All…”)
+	•	Has image (toggle)
+	•	Date (Today, 7d, 30d, Custom)
+	•	Sort: Recent ▾ (Recent, Oldest, Page asc/desc)
+
+⸻
+
+Card details (tap to open Edit sheet)
+	•	Fields: Text (markdown), Book, Page, Type, Tags, “Make Recall”, Attachment preview.
+	•	Footer: Created, Updated, a Copy Link (deep link app://note/{id}).
+	•	“Convert to …” shortcuts:
+	•	Quote → Summary
+	•	Note → Action (keeps text, adds checkbox)
+	•	Any → Recall (creates/updates recall schedule)  Client structure
+	•	<NotesPage/>
+	•	<HeaderSearchAndFilters/> (search + chips)
+	•	<QuickCaptureInline/> (collapsed by default; opens as bottom sheet on “+”)
+	•	<NotesListVirtualized/>
+	•	<EditNoteSheet/> (modal sheet)
+	•	Reuse shadcn Sheet, Input, Textarea, Badge, Button, Dropdown.  Client structure
+	•	<NotesPage/>
+	•	<HeaderSearchAndFilters/> (search + chips)
+	•	<QuickCaptureInline/> (collapsed by default; opens as bottom sheet on “+”)
+	•	<NotesListVirtualized/>
+	•	<EditNoteSheet/> (modal sheet)
+	•	Reuse shadcn Sheet, Input, Textarea, Badge, Button, Dropdown.  Validation & guardrails
+	•	Require text for non-attachment notes; for Quote, trim whitespace and preserve punctuation.
+	•	Prevent page < 1 or > book.pageCount (if known).
+	•	Tag input: suggest from existing tags; create new on submit.
+	•	Deleting a note with recall: warn “This will also remove its review schedule” (Undo available).
+
+⸻
+
+Acceptance checklist
+	•	Add a note from scratch in ≤3 taps: + → type → Save.
+	•	On Currently Reading, pressing + Note lands here with book & page prefilled.
+	•	Search “dopamine” finds matching notes, quotes, and tagged items.
+	•	Filters combine (e.g., Book=A, Type=Quote, Tag=Psych).
+	•	Toggle Make Recall creates a schedule; banner shows due count when appropriate.
+	•	Offline: create/edit/delete notes; they sync later without duplicates.
+	•	Feed remains smooth with 1,000 notes.
+
+⸻
+
+Small implementation tips
+	•	Store note text as Markdown; render with a lightweight MD renderer (no heavy plugins on mobile).
+	•	Keep edit in a sheet (slides up) rather than a full page navigation—faster on phones.
+	•	For OCR later, just store the image and a placeholder; add a server job or client worker to process.
