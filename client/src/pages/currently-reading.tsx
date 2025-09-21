@@ -30,6 +30,31 @@ export default function CurrentlyReading() {
     },
   });
 
+  // Query for active session of selected book (moved here to fix hooks rule violation)
+  const { data: activeSession, refetch: refetchActiveSession } = useQuery({
+    queryKey: ['/api/books', selectedBook?.id, 'active-session'],
+    queryFn: async () => {
+      if (!selectedBook) return null;
+      
+      const response = await fetch(`/api/books/${selectedBook.id}/active-session`);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch active session');
+      }
+      
+      const data = await response.json();
+      return data ? {
+        ...data,
+        startedAt: new Date(data.startedAt),
+        sessionDate: new Date(data.sessionDate),
+        pausedAt: data.pausedAt ? new Date(data.pausedAt) : null,
+        resumedAt: data.resumedAt ? new Date(data.resumedAt) : null,
+        endedAt: data.endedAt ? new Date(data.endedAt) : null,
+      } as ReadingSession : null;
+    },
+    enabled: !!selectedBook,
+  });
+
   // Auto-select the first book if none is selected
   useEffect(() => {
     if (!selectedBook && currentlyReadingBooks.length > 0) {
@@ -81,30 +106,6 @@ export default function CurrentlyReading() {
     );
   }
 
-  // Query for active session of selected book
-  const { data: activeSession, refetch: refetchActiveSession } = useQuery({
-    queryKey: ['/api/books', selectedBook?.id, 'active-session'],
-    queryFn: async () => {
-      if (!selectedBook) return null;
-      
-      const response = await fetch(`/api/books/${selectedBook.id}/active-session`);
-      if (!response.ok) {
-        if (response.status === 404) return null;
-        throw new Error('Failed to fetch active session');
-      }
-      
-      const data = await response.json();
-      return data ? {
-        ...data,
-        startedAt: new Date(data.startedAt),
-        sessionDate: new Date(data.sessionDate),
-        pausedAt: data.pausedAt ? new Date(data.pausedAt) : null,
-        resumedAt: data.resumedAt ? new Date(data.resumedAt) : null,
-        endedAt: data.endedAt ? new Date(data.endedAt) : null,
-      } as ReadingSession : null;
-    },
-    enabled: !!selectedBook,
-  });
 
   const handleBookSelect = (book: Book) => {
     setSelectedBook(book);
