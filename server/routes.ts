@@ -914,7 +914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookData = {
         title: searchResult.title,
         author: Array.isArray(searchResult.authors) ? searchResult.authors.join(', ') : searchResult.author || 'Unknown Author',
-        genre: genre,
+        genre: genre as "Fiction" | "Self-Help / Personal Development" | "Business / Finance" | "Philosophy / Spirituality" | "Psychology / Self-Improvement" | "History / Culture" | "Science / Technology" | "General Non-Fiction" | "Biography/Memoir",
         status: 'toRead' as const,
         priority: 3, // medium priority
         format: 'paper' as const,
@@ -938,6 +938,213 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       console.error("Error adding book from search:", error);
       res.status(500).json({ error: "Failed to add book" });
+    }
+  });
+
+  // Import books from CSV/JSON
+  app.post("/api/books/import", async (req, res) => {
+    try {
+      const { books, options } = req.body;
+      
+      if (!Array.isArray(books)) {
+        return res.status(400).json({ error: "Books must be an array" });
+      }
+
+      const importResult = {
+        success: true,
+        imported: 0,
+        errors: [] as string[],
+        duplicates: 0,
+      };
+
+      // Get existing books for duplicate detection
+      const existingBooks = await storage.getAllBooks();
+      const existingBooksMap = new Map(
+        existingBooks.map(book => [`${book.title.toLowerCase()}-${book.author.toLowerCase()}`, book])
+      );
+
+      for (let i = 0; i < books.length; i++) {
+        const bookData = books[i];
+        
+        try {
+          // Validate required fields
+          if (!bookData.title || !bookData.author) {
+            importResult.errors.push(`Row ${i + 1}: Missing title or author`);
+            continue;
+          }
+
+          // Check for duplicates
+          const key = `${bookData.title.toLowerCase()}-${bookData.author.toLowerCase()}`;
+          const existingBook = existingBooksMap.get(key);
+          
+          if (existingBook) {
+            if (options?.skipDuplicates && !options?.updateExisting) {
+              importResult.duplicates++;
+              continue;
+            }
+            
+            if (options?.updateExisting) {
+              // Update existing book
+              const updates = {
+                genre: bookData.genre || existingBook.genre,
+                status: bookData.status || existingBook.status,
+                priority: bookData.priority || existingBook.priority,
+                format: bookData.format || existingBook.format,
+                totalPages: bookData.totalPages || existingBook.totalPages,
+                language: bookData.language || existingBook.language,
+                tags: bookData.tags || existingBook.tags,
+                notes: bookData.notes || existingBook.notes,
+                ...(options?.preserveProgress ? {} : {
+                  currentPage: bookData.currentPage || 0,
+                  progress: bookData.progress || 0,
+                }),
+              };
+              
+              await storage.updateBook(existingBook.id, updates);
+              importResult.imported++;
+              continue;
+            }
+          }
+
+          // Create new book
+          const newBook = {
+            title: bookData.title,
+            author: bookData.author,
+            genre: bookData.genre || 'General Non-Fiction',
+            status: bookData.status || 'toRead',
+            priority: bookData.priority || 3,
+            format: bookData.format || 'paper',
+            totalPages: bookData.totalPages || 0,
+            currentPage: bookData.currentPage || 0,
+            progress: bookData.progress || 0,
+            language: bookData.language || 'English',
+            tags: bookData.tags || [],
+            notes: bookData.notes || [],
+            topics: bookData.tags || [],
+          };
+
+          await storage.createBook(newBook);
+          importResult.imported++;
+          
+        } catch (error) {
+          console.error(`Error importing book ${i + 1}:`, error);
+          importResult.errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+
+      if (importResult.errors.length > 0) {
+        importResult.success = false;
+      }
+
+      res.json(importResult);
+    } catch (error) {
+      console.error("Error importing books:", error);
+      res.status(500).json({ error: "Failed to import books" });
+    }
+  });
+
+  // Export books as CSV/JSON
+  app.get("/api/books/export", async (req, res) => {
+    try {
+      const format = req.query.format as string || 'json';
+      const includeNotes = req.query.includeNotes === 'true';
+      const includeTags = req.query.includeTags === 'true';
+      const statusFilter = req.query.status as string;
+      
+      let books = await storage.getAllBooks();
+      
+      // Filter by status if specified
+      if (statusFilter) {
+        const statuses = statusFilter.split(',');
+        books = books.filter(book => statuses.includes(book.status));
+      }
+
+      if (format === 'csv') {
+        const headers = [
+          'Title',
+          'Author', 
+          'Genre',
+          'Status',
+          'Priority',
+          'Format',
+          'Total Pages',
+          'Current Page',
+          'Progress',
+          'Language',
+          'Added Date',
+          'Started Date',
+          'Completed Date',
+          'Last Read Date',
+          ...(includeTags ? ['Tags'] : []),
+          ...(includeNotes ? ['Notes'] : []),
+        ];
+
+        const rows = books.map(book => {
+          const row = [
+            book.title || '',
+            book.author || '',
+            book.genre || '',
+            book.status || '',
+            book.priority?.toString() || '',
+            book.format || '',
+            book.totalPages?.toString() || '',
+            book.currentPage?.toString() || '',
+            `${Math.round((book.progress || 0) * 100)}%`,
+            book.language || '',
+            book.addedAt ? new Date(book.addedAt).toISOString().split('T')[0] : '',
+            book.startedAt ? new Date(book.startedAt).toISOString().split('T')[0] : '',
+            book.completedAt ? new Date(book.completedAt).toISOString().split('T')[0] : '',
+            book.lastReadAt ? new Date(book.lastReadAt).toISOString().split('T')[0] : '',
+            ...(includeTags ? [(book.tags || []).join('; ')] : []),
+            ...(includeNotes ? [(book.notes || []).join('; ')] : []),
+          ];
+          
+          return row.map(cell => {
+            const str = String(cell);
+            if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+              return `"${str.replace(/"/g, '""')}"`;
+            }
+            return str;
+          });
+        });
+
+        const csvContent = [headers, ...rows].map(row => row.join(',')).join('\n');
+        
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="my-library.csv"');
+        res.send(csvContent);
+      } else {
+        // JSON export
+        const exportData = {
+          exportDate: new Date().toISOString(),
+          totalBooks: books.length,
+          books: books.map(book => ({
+            title: book.title,
+            author: book.author,
+            genre: book.genre,
+            status: book.status,
+            priority: book.priority,
+            format: book.format,
+            totalPages: book.totalPages,
+            currentPage: book.currentPage,
+            progress: book.progress,
+            language: book.language,
+            addedAt: book.addedAt,
+            startedAt: book.startedAt,
+            completedAt: book.completedAt,
+            lastReadAt: book.lastReadAt,
+            ...(includeTags && { tags: book.tags }),
+            ...(includeNotes && { notes: book.notes }),
+          })),
+        };
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename="my-library.json"');
+        res.json(exportData);
+      }
+    } catch (error) {
+      console.error("Error exporting books:", error);
+      res.status(500).json({ error: "Failed to export books" });
     }
   });
 

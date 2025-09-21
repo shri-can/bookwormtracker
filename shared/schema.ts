@@ -65,6 +65,22 @@ export const readingSessions = pgTable("reading_sessions", {
   localId: text("local_id"), // For offline session management
 });
 
+// Reading goals for motivation and tracking
+export const readingGoals = pgTable("reading_goals", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  type: text("type").notNull(), // 'books'|'pages'|'minutes'
+  target: integer("target").notNull(),
+  current: integer("current").default(0),
+  period: text("period").notNull(), // 'daily'|'weekly'|'monthly'|'yearly'
+  startDate: date("start_date").notNull(),
+  endDate: date("end_date").notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 // Standalone notes and highlights
 export const bookNotes = pgTable("book_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -310,6 +326,14 @@ export type InsertDailyTotals = z.infer<typeof insertDailyTotalsSchema>;
 
 export type DailyBookTotals = typeof dailyBookTotals.$inferSelect;
 export type InsertDailyBookTotals = z.infer<typeof insertDailyBookTotalsSchema>;
+
+// Reading Goals types
+export const insertReadingGoalSchema = createInsertSchema(readingGoals).omit({ id: true, current: true, createdAt: true, updatedAt: true });
+export const updateReadingGoalSchema = createInsertSchema(readingGoals).omit({ id: true, createdAt: true, updatedAt: true }).partial();
+
+export type ReadingGoal = typeof readingGoals.$inferSelect;
+export type InsertReadingGoal = z.infer<typeof insertReadingGoalSchema>;
+export type UpdateReadingGoal = z.infer<typeof updateReadingGoalSchema>;
 
 // Action type exports
 export type StartSessionRequest = z.infer<typeof startSessionSchema>;

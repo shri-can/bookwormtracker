@@ -10,6 +10,7 @@ import Library from "@/pages/library";
 import CurrentlyReading from "@/pages/currently-reading";
 import Stats from "@/pages/stats";
 import Notes from "@/pages/notes";
+import Goals from "@/pages/goals";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/reading" component={CurrentlyReading} />
       <Route path="/stats" component={Stats} />
       <Route path="/notes" component={Notes} />
+      <Route path="/goals" component={Goals} />
       <Route component={NotFound} />
     </Switch>
   );

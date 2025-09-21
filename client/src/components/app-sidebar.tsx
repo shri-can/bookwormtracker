@@ -1,4 +1,4 @@
-import { BookOpen, Library, NotebookPen, TrendingUp } from "lucide-react";
+import { BookOpen, Library, NotebookPen, TrendingUp, Target } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -22,6 +22,11 @@ const navigation = [
     title: "Currently Reading",
     url: "/reading",
     icon: BookOpen,
+  },
+  {
+    title: "Reading Goals",
+    url: "/goals",
+    icon: Target,
   },
   {
     title: "Reading Stats",

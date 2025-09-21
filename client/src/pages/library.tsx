@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { BookCard } from "@/components/book-card";
 import { AddBookDialog } from "@/components/add-book-dialog";
 import { BulkUploadDialog } from "@/components/bulk-upload-dialog";
+import { BookSearchDialog } from "@/components/book-search-dialog";
+import { ExportDialog } from "@/components/export-dialog";
+import { ImportDialog } from "@/components/import-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +28,9 @@ import {
   Plus,
   Trash2,
   Tag,
-  RotateCcw
+  RotateCcw,
+  Download,
+  Upload
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -421,7 +426,25 @@ export default function Library() {
             {isLoading ? "Loading..." : `${books.length} books in your collection`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <BookSearchDialog>
+            <Button data-testid="button-search-books">
+              <Search className="h-4 w-4 mr-2" />
+              Search Books
+            </Button>
+          </BookSearchDialog>
+          <ImportDialog>
+            <Button variant="outline" data-testid="button-import-books">
+              <Upload className="h-4 w-4 mr-2" />
+              Import
+            </Button>
+          </ImportDialog>
+          <ExportDialog>
+            <Button variant="outline" data-testid="button-export-books">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+          </ExportDialog>
           <BulkUploadDialog onBulkUpload={handleBulkUpload} />
           <AddBookDialog onAddBook={handleAddBook} />
         </div>
