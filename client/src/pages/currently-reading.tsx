@@ -1,239 +1,201 @@
-import { useState } from "react";
-import { ReadingProgress } from "@/components/reading-progress";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BookOpen, Clock, Target } from "lucide-react";
-
-interface ReadingSession {
-  id: string;
-  startPage: number;
-  endPage: number;
-  sessionDate: string;
-  notes?: string;
-}
-
-interface BookWithSessions {
-  id: string;
-  title: string;
-  author: string;
-  genre: string;
-  totalPages: number;
-  currentPage: number;
-  startedAt: string;
-  isCurrentlyReading: boolean;
-  sessions?: ReadingSession[];
-}
-
-// todo: remove mock functionality  
-const mockCurrentlyReading: BookWithSessions[] = [
-  {
-    id: "1",
-    title: "Clean Code",
-    author: "Robert C. Martin",
-    genre: "Programming",
-    totalPages: 464,
-    currentPage: 125,
-    startedAt: "2024-01-10",
-    isCurrentlyReading: true,
-  },
-  {
-    id: "2", 
-    title: "The Lean Startup",
-    author: "Eric Ries",
-    genre: "Business",
-    totalPages: 336,
-    currentPage: 89,
-    startedAt: "2024-01-05",
-    isCurrentlyReading: true,
-  },
-  {
-    id: "3",
-    title: "Atomic Habits",
-    author: "James Clear",
-    genre: "Self-Help",
-    totalPages: 320,
-    currentPage: 187,
-    startedAt: "2024-01-15",
-    isCurrentlyReading: true,
-  },
-];
+import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { BookSwitcher } from '@/components/book-switcher';
+import { HeroSessionCard } from '@/components/hero-session-card';
+import { AddBookDialog } from '@/components/add-book-dialog';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { BookOpen, Plus } from 'lucide-react';
+import type { Book, ReadingSession } from '@shared/schema';
 
 export default function CurrentlyReading() {
-  const [books, setBooks] = useState(mockCurrentlyReading);
+  const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [showAddBookDialog, setShowAddBookDialog] = useState(false);
 
-  const handleUpdateProgress = (id: string, newPage: number) => {
-    setBooks(prev => prev.map(book => {
-      if (book.id === id) {
-        const oldPage = book.currentPage;
+  // Query for currently reading books to initialize the selected book
+  const { data: currentlyReadingBooks = [], isLoading: isLoadingBooks, error: booksError } = useQuery({
+    queryKey: ['/api/books/currently-reading'],
+    queryFn: async () => {
+      const response = await fetch('/api/books/currently-reading');
+      if (!response.ok) throw new Error('Failed to fetch currently reading books');
+      const data = await response.json();
+      return data.map((book: any) => ({
+        ...book,
+        addedAt: new Date(book.addedAt),
+        lastReadAt: book.lastReadAt ? new Date(book.lastReadAt) : null,
+        startedAt: book.startedAt ? new Date(book.startedAt) : null,
+        completedAt: book.completedAt ? new Date(book.completedAt) : null,
+      })) as Book[];
+    },
+  });
+
+  // Auto-select the first book if none is selected
+  useEffect(() => {
+    if (!selectedBook && currentlyReadingBooks.length > 0) {
+      setSelectedBook(currentlyReadingBooks[0]);
+    }
+  }, [currentlyReadingBooks, selectedBook]);
+
+  // Show loading state
+  if (isLoadingBooks) {
+    return (
+      <div className="space-y-6" data-testid="page-currently-reading">
+        <div>
+          <h1 className="text-3xl font-serif font-semibold">Currently Reading</h1>
+          <p className="text-muted-foreground mt-1">
+            Track your reading sessions with advanced timer and progress forecasting
+          </p>
+        </div>
         
-        // Create a reading session if progress moved forward
-        if (newPage > oldPage) {
-          const newSession = {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-            startPage: oldPage,
-            endPage: newPage,
-            sessionDate: new Date().toISOString(),
-            notes: `Progress updated: ${oldPage} → ${newPage} pages`,
-          };
-          
-          return {
-            ...book,
-            currentPage: newPage,
-            sessions: [...(book.sessions || []), newSession]
-          };
-        }
+        <div className="space-y-4">
+          <Skeleton className="h-16 w-full" />
+          <div className="max-w-2xl mx-auto">
+            <Skeleton className="h-96 w-full" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (booksError) {
+    return (
+      <div className="space-y-6" data-testid="page-currently-reading">
+        <div>
+          <h1 className="text-3xl font-serif font-semibold">Currently Reading</h1>
+          <p className="text-muted-foreground mt-1">
+            Track your reading sessions with advanced timer and progress forecasting
+          </p>
+        </div>
         
-        // If progress moved backward or stayed the same, just update current page
-        return { ...book, currentPage: newPage };
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-destructive mb-4">Error loading books</div>
+            <p className="text-muted-foreground">
+              {booksError instanceof Error ? booksError.message : 'Failed to load currently reading books'}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Query for active session of selected book
+  const { data: activeSession, refetch: refetchActiveSession } = useQuery({
+    queryKey: ['/api/books', selectedBook?.id, 'active-session'],
+    queryFn: async () => {
+      if (!selectedBook) return null;
+      
+      const response = await fetch(`/api/books/${selectedBook.id}/active-session`);
+      if (!response.ok) {
+        if (response.status === 404) return null;
+        throw new Error('Failed to fetch active session');
       }
-      return book;
-    }));
-    console.log(`Updated progress for book ${id} to page ${newPage}`);
+      
+      const data = await response.json();
+      return data ? {
+        ...data,
+        startedAt: new Date(data.startedAt),
+        sessionDate: new Date(data.sessionDate),
+        pausedAt: data.pausedAt ? new Date(data.pausedAt) : null,
+        resumedAt: data.resumedAt ? new Date(data.resumedAt) : null,
+        endedAt: data.endedAt ? new Date(data.endedAt) : null,
+      } as ReadingSession : null;
+    },
+    enabled: !!selectedBook,
+  });
+
+  const handleBookSelect = (book: Book) => {
+    setSelectedBook(book);
   };
 
-  const handleAddSession = (id: string, session: { startPage: number; endPage: number; notes?: string }) => {
-    setBooks(prev => prev.map(book => {
-      if (book.id === id) {
-        const newSession = {
-          id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
-          ...session,
-          sessionDate: new Date().toISOString(),
-        };
-        return {
-          ...book,
-          sessions: [...(book.sessions || []), newSession],
-          currentPage: Math.max(book.currentPage, session.endPage)
-        };
-      }
-      return book;
-    }));
-    console.log(`Added reading session for book ${id}: pages ${session.startPage}-${session.endPage}`);
+  const handleSessionUpdate = () => {
+    refetchActiveSession();
   };
 
-  const handleEditSession = (bookId: string, sessionId: string, updates: { startPage: number; endPage: number; notes?: string }) => {
-    setBooks(prev => prev.map(book => {
-      if (book.id === bookId) {
-        const updatedSessions = (book.sessions || []).map(session => 
-          session.id === sessionId 
-            ? { ...session, ...updates }
-            : session
-        );
-        
-        // Recalculate current page based on all sessions
-        const maxPageFromSessions = updatedSessions.reduce((max, session) => 
-          Math.max(max, session.endPage), 0
-        );
-        
-        return {
-          ...book,
-          sessions: updatedSessions,
-          currentPage: Math.max(book.currentPage, maxPageFromSessions)
-        };
-      }
-      return book;
-    }));
-    console.log(`Edited session ${sessionId} for book ${bookId}: pages ${updates.startPage}-${updates.endPage}`);
+  const handleAddNewBook = () => {
+    setShowAddBookDialog(true);
   };
 
-  const totalPages = books.reduce((sum, book) => sum + book.totalPages, 0);
-  const totalReadPages = books.reduce((sum, book) => sum + book.currentPage, 0);
-  const overallProgress = totalPages > 0 ? (totalReadPages / totalPages) * 100 : 0;
+  // Show empty state if no books are currently being read
+  if (currentlyReadingBooks.length === 0) {
+    return (
+      <div className="space-y-6" data-testid="page-currently-reading">
+        <div>
+          <h1 className="text-3xl font-serif font-semibold">Currently Reading</h1>
+          <p className="text-muted-foreground mt-1">
+            Advanced session tracking for your active books
+          </p>
+        </div>
 
-  const totalDaysReading = books.reduce((sum, book) => {
-    const days = Math.floor((new Date().getTime() - new Date(book.startedAt).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return sum + days;
-  }, 0);
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12 text-center">
+            <BookOpen className="h-16 w-16 text-muted-foreground mb-6" />
+            <h3 className="text-xl font-semibold mb-2">No books currently reading</h3>
+            <p className="text-muted-foreground mb-6 max-w-md">
+              Start your first reading session with our advanced timer and progress tracking. 
+              Add a book and begin tracking your reading journey.
+            </p>
+            <Button onClick={handleAddNewBook} size="lg" data-testid="button-add-first-book">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Book
+            </Button>
+          </CardContent>
+        </Card>
 
-  const averagePagesPerDay = totalDaysReading > 0 ? totalReadPages / totalDaysReading : 0;
+        <AddBookDialog
+          open={showAddBookDialog}
+          onOpenChange={setShowAddBookDialog}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="page-currently-reading">
       <div>
         <h1 className="text-3xl font-serif font-semibold">Currently Reading</h1>
         <p className="text-muted-foreground mt-1">
-          Track your progress on {books.length} active books
+          Track your reading sessions with advanced timer and progress forecasting
         </p>
       </div>
 
-      {books.length === 0 ? (
+      {/* Book Switcher */}
+      <BookSwitcher
+        selectedBook={selectedBook}
+        onBookSelect={handleBookSelect}
+        onAddNewBook={handleAddNewBook}
+        currentlyReadingBooks={currentlyReadingBooks}
+      />
+
+      {/* Hero Session Card */}
+      {selectedBook && (
+        <div className="max-w-2xl mx-auto">
+          <HeroSessionCard
+            book={selectedBook}
+            activeSession={activeSession}
+            onSessionUpdate={handleSessionUpdate}
+          />
+        </div>
+      )}
+
+      {!selectedBook && currentlyReadingBooks.length > 0 && (
         <Card>
-          <CardContent className="pt-6 text-center">
-            <BookOpen className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No books currently being read</h3>
+          <CardContent className="text-center py-8">
+            <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Select a book to start reading</h3>
             <p className="text-muted-foreground">
-              Start reading a book from your library to track your progress here.
+              Choose a book from the dropdown above to begin your reading session
             </p>
           </CardContent>
         </Card>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card data-testid="card-overall-stats">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Overall Progress</CardTitle>
-                <Target className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-overall-progress">
-                  {Math.round(overallProgress)}%
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {totalReadPages} of {totalPages} pages
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-books-reading">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Books Reading</CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-books-count">
-                  {books.length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Active reading sessions
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card data-testid="card-reading-pace">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average Pace</CardTitle>
-                <Clock className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold" data-testid="text-average-pace">
-                  {averagePagesPerDay.toFixed(1)}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Pages per day
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold">Your Reading Progress</h2>
-              <Badge variant="outline">{books.length} books</Badge>
-            </div>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" data-testid="grid-reading-progress">
-              {books.map((book) => (
-                <ReadingProgress
-                  key={book.id}
-                  {...book}
-                  onUpdateProgress={handleUpdateProgress}
-                  onAddSession={handleAddSession}
-                  onEditSession={handleEditSession}
-                />
-              ))}
-            </div>
-          </div>
-        </>
       )}
+
+      <AddBookDialog
+        open={showAddBookDialog}
+        onOpenChange={setShowAddBookDialog}
+      />
     </div>
   );
 }

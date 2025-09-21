@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +36,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BOOK_GENRES, BOOK_STATUSES, BOOK_FORMATS, insertBookSchema } from "@shared/schema";
 import { bookSearchService } from "@/services/bookSearch";
+import { apiRequest } from "@/lib/queryClient";
 
 // Use the shared insertBookSchema from the backend
 const addBookSchema = insertBookSchema;
@@ -44,13 +46,48 @@ type AddBookForm = z.infer<typeof addBookSchema>;
 interface AddBookDialogProps {
   onAddBook?: (book: AddBookForm) => void;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBookDialogProps) {
+  const queryClient = useQueryClient();
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
+  
+  // Use controlled state if provided, otherwise use internal state
+  const isOpen = open !== undefined ? open : internalIsOpen;
+  const setIsOpen = onOpenChange !== undefined ? onOpenChange : setInternalIsOpen;
   const [hasAutoFetched, setHasAutoFetched] = useState(false);
   const [topicInput, setTopicInput] = useState("");
+
+  // Mutation for creating books
+  const createBookMutation = useMutation({
+    mutationFn: async (bookData: AddBookForm) => {
+      return await apiRequest('/api/books', {
+        method: 'POST',
+        body: JSON.stringify(bookData),
+      });
+    },
+    onSuccess: (newBook) => {
+      // Invalidate queries to refresh book lists
+      queryClient.invalidateQueries({ queryKey: ['/api/books'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/books/currently-reading'] });
+      
+      // Close dialog and reset form
+      setIsOpen(false);
+      form.reset();
+      setHasAutoFetched(false);
+      setTopicInput("");
+      
+      // Call optional callback
+      if (onAddBook) {
+        onAddBook(newBook);
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to create book:', error);
+    },
+  });
 
   const form = useForm<AddBookForm>({
     resolver: zodResolver(addBookSchema),
@@ -159,16 +196,11 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
   };
 
   const onSubmit = async (data: AddBookForm) => {
-    setIsSubmitting(true);
-    console.log("Adding book:", data);
-    
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    onAddBook?.(data);
-    resetForm();
-    setIsOpen(false);
-    setIsSubmitting(false);
+    try {
+      await createBookMutation.mutateAsync(data);
+    } catch (error) {
+      console.error('Failed to create book:', error);
+    }
   };
 
   const defaultTrigger = (
@@ -528,8 +560,8 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
               )}
             />
             <DialogFooter>
-              <Button type="submit" disabled={isSubmitting} data-testid="button-submit-book">
-                {isSubmitting ? "Adding..." : "Add Book"}
+              <Button type="submit" disabled={createBookMutation.isPending} data-testid="button-submit-book">
+                {createBookMutation.isPending ? "Adding..." : "Add Book"}
               </Button>
             </DialogFooter>
           </form>
