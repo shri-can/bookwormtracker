@@ -266,7 +266,7 @@ export default function Library() {
         id,
         updates: { 
           status: "reading",
-          lastReadAt: new Date(),
+          lastReadAt: new Date().toISOString(),
         }
       });
       toast({ title: "Started reading" });
@@ -280,7 +280,7 @@ export default function Library() {
       await updateBookMutation.mutateAsync({
         id,
         updates: { 
-          lastReadAt: new Date(),
+          lastReadAt: new Date().toISOString(),
         }
       });
       toast({ title: "Reading session updated" });
@@ -308,7 +308,7 @@ export default function Library() {
         id,
         updates: { 
           status: newStatus as any,
-          lastReadAt: newStatus === "reading" ? new Date() : undefined,
+          lastReadAt: newStatus === "reading" ? new Date().toISOString() : undefined,
         }
       });
       toast({ title: `Status changed to ${newStatus}` });

@@ -63,10 +63,7 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
   // Mutation for creating books
   const createBookMutation = useMutation({
     mutationFn: async (bookData: AddBookForm) => {
-      return await apiRequest('/api/books', {
-        method: 'POST',
-        body: JSON.stringify(bookData),
-      });
+      return await apiRequest('POST', '/api/books', bookData);
     },
     onSuccess: (newBook) => {
       // Invalidate queries to refresh book lists

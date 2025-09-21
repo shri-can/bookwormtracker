@@ -229,7 +229,12 @@ export const insertBookSchema = createInsertSchema(books).omit({
   tags: z.array(z.string().trim().min(1).max(30)).max(15).default([]),
 });
 
-export const updateBookSchema = insertBookSchema.partial();
+export const updateBookSchema = insertBookSchema.partial().extend({
+  lastReadAt: z.union([z.date(), z.string().datetime()]).optional().transform(val => {
+    if (typeof val === 'string') return new Date(val);
+    return val;
+  }),
+});
 
 // Reading session schemas
 export const insertReadingSessionSchema = createInsertSchema(readingSessions).omit({
