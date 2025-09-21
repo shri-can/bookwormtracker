@@ -8,41 +8,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Book CRUD routes
   
   // Get all books with filtering
+  // Helper function to parse multi-value query parameters (handles comma-separated values)
+  const parseMultiValue = (value: any): string[] => {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.flatMap(v => String(v).split(",").map(s => s.trim()).filter(Boolean));
+    }
+    return String(value).split(",").map(s => s.trim()).filter(Boolean);
+  };
+
   app.get("/api/books", async (req, res) => {
     try {
       const filters: BookFilters = {};
       
       if (req.query.search) filters.search = req.query.search as string;
-      if (req.query.statuses) {
-        const statuses = Array.isArray(req.query.statuses) 
-          ? req.query.statuses as string[] 
-          : [req.query.statuses as string];
-        filters.statuses = statuses;
-      }
-      if (req.query.genres) {
-        const genres = Array.isArray(req.query.genres) 
-          ? req.query.genres as string[] 
-          : [req.query.genres as string];
-        filters.genres = genres;
-      }
-      if (req.query.tags) {
-        const tags = Array.isArray(req.query.tags) 
-          ? req.query.tags as string[] 
-          : [req.query.tags as string];
-        filters.tags = tags;
-      }
-      if (req.query.formats) {
-        const formats = Array.isArray(req.query.formats) 
-          ? req.query.formats as string[] 
-          : [req.query.formats as string];
-        filters.formats = formats;
-      }
-      if (req.query.languages) {
-        const languages = Array.isArray(req.query.languages) 
-          ? req.query.languages as string[] 
-          : [req.query.languages as string];
-        filters.languages = languages;
-      }
+      if (req.query.statuses) filters.statuses = parseMultiValue(req.query.statuses);
+      if (req.query.genres) filters.genres = parseMultiValue(req.query.genres);
+      if (req.query.tags) filters.tags = parseMultiValue(req.query.tags);
+      if (req.query.formats) filters.formats = parseMultiValue(req.query.formats);
+      if (req.query.languages) filters.languages = parseMultiValue(req.query.languages);
       if (req.query.sort) filters.sort = req.query.sort as any;
       if (req.query.sortOrder) filters.sortOrder = req.query.sortOrder as "asc" | "desc";
 
