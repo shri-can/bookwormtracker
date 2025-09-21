@@ -69,7 +69,12 @@ export function BookSearchDialog({ children }: BookSearchDialogProps) {
   });
 
   const addBookMutation = useMutation({
-    mutationFn: (bookData: SearchResult) => apiRequest('POST', `/api/books/add-from-search`, bookData),
+    mutationFn: (bookData: SearchResult) => apiRequest('POST', `/api/books/add-from-search`, {
+      searchResult: bookData,
+      format: "paper",
+      status: "toRead", 
+      priority: 2
+    }),
     onSuccess: () => {
       toast({
         title: "Book added successfully",
