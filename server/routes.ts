@@ -566,6 +566,260 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get comprehensive reading stats overview
+  app.get("/api/stats/overview", async (req, res) => {
+    try {
+      const fromParam = req.query.from as string;
+      const toParam = req.query.to as string;
+      
+      // Helper functions for proper date handling
+      const formatDateString = (date: Date): string => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+      
+      const parseAndValidateDate = (dateStr: string): Date | null => {
+        if (!dateStr) return null;
+        const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (!match) return null;
+        
+        const year = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10) - 1; // 0-indexed
+        const day = parseInt(match[3], 10);
+        
+        const date = new Date(year, month, day);
+        if (date.getFullYear() !== year || date.getMonth() !== month || date.getDate() !== day) {
+          return null; // Invalid date
+        }
+        
+        return date;
+      };
+      
+      const generateDateRange = (start: string, end: string): string[] => {
+        const dates: string[] = [];
+        const startDate = parseAndValidateDate(start);
+        const endDate = parseAndValidateDate(end);
+        
+        if (!startDate || !endDate) return [];
+        
+        const current = new Date(startDate);
+        while (current <= endDate) {
+          dates.push(formatDateString(current));
+          current.setDate(current.getDate() + 1);
+        }
+        
+        return dates;
+      };
+      
+      // Default to last 30 days if no range provided
+      const today = new Date();
+      const defaultFrom = new Date(today);
+      defaultFrom.setDate(today.getDate() - 30);
+      
+      const fromDate = fromParam ? 
+        (parseAndValidateDate(fromParam) ? formatDateString(parseAndValidateDate(fromParam)!) : null) :
+        formatDateString(defaultFrom);
+      
+      const toDate = toParam ? 
+        (parseAndValidateDate(toParam) ? formatDateString(parseAndValidateDate(toParam)!) : null) :
+        formatDateString(today);
+      
+      // Validate dates
+      if (!fromDate || !toDate) {
+        return res.status(400).json({ error: "Invalid date format. Use YYYY-MM-DD." });
+      }
+      
+      // Clamp toDate to today if it's in the future
+      const todayStr = formatDateString(today);
+      const clampedToDate = toDate > todayStr ? todayStr : toDate;
+      
+      // Validate range
+      if (fromDate > clampedToDate) {
+        return res.status(400).json({ error: "From date must be before or equal to to date." });
+      }
+      
+      // Extend range backwards for streak calculation (up to 365 days from end of range)
+      const clampedToDateObj = parseAndValidateDate(clampedToDate)!;
+      const extendedStartDate = new Date(clampedToDateObj);
+      extendedStartDate.setDate(clampedToDateObj.getDate() - 365);
+      const extendedFrom = formatDateString(extendedStartDate);
+      
+      // Get daily totals for both the requested range and extended range for streaks
+      const [dailyTotalsData, extendedDailyTotalsData, allBooks, activeBooks] = await Promise.all([
+        storage.getDailyTotalsInRange(fromDate, clampedToDate),
+        storage.getDailyTotalsInRange(extendedFrom, clampedToDate),
+        storage.getAllBooks(),
+        storage.getCurrentlyReadingBooks()
+      ]);
+      
+      // Create full date range with zero-fill for missing days
+      const allDatesInRange = generateDateRange(fromDate, clampedToDate);
+      const dailyTotalsMap = new Map(dailyTotalsData.map(day => [day.date, day]));
+      const extendedDailyTotalsMap = new Map(extendedDailyTotalsData.map(day => [day.date, day]));
+      
+      const fullDailyTotals = allDatesInRange.map(date => 
+        dailyTotalsMap.get(date) || { 
+          id: 0, 
+          date, 
+          pages: 0, 
+          minutes: 0, 
+          sessions: 0 
+        }
+      );
+      
+      // Calculate totals
+      const totals = {
+        pages: fullDailyTotals.reduce((sum, day) => sum + day.pages, 0),
+        minutes: fullDailyTotals.reduce((sum, day) => sum + day.minutes, 0),
+        sessions: fullDailyTotals.reduce((sum, day) => sum + day.sessions, 0),
+      };
+      
+      // Calculate streaks properly
+      const calculateStreaks = () => {
+        // Get extended data for current streak calculation (anchored to requested end date)
+        const extendedDates = generateDateRange(extendedFrom, clampedToDate);
+        const extendedDailyTotals = extendedDates.map(date => {
+          const existingDay = extendedDailyTotalsMap.get(date);
+          return existingDay || { id: 0, date, pages: 0, minutes: 0, sessions: 0 };
+        });
+        
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let tempStreak = 0;
+        
+        // Calculate current streak (work backwards from the end of requested range)
+        for (let i = extendedDailyTotals.length - 1; i >= 0; i--) {
+          const day = extendedDailyTotals[i];
+          const isReadDay = day.pages >= 1 || day.minutes >= 5;
+          
+          if (isReadDay) {
+            currentStreak++;
+          } else {
+            break; // End of current streak
+          }
+        }
+        
+        // Calculate best streak in the requested range
+        for (const day of fullDailyTotals) {
+          const isReadDay = day.pages >= 1 || day.minutes >= 5;
+          
+          if (isReadDay) {
+            tempStreak++;
+            bestStreak = Math.max(bestStreak, tempStreak);
+          } else {
+            tempStreak = 0;
+          }
+        }
+        
+        return { current: currentStreak, best: bestStreak };
+      };
+      
+      const streak = calculateStreaks();
+      
+      // Get finished books in range (using date-only comparison)
+      const finishedBooks = await Promise.all(
+        allBooks
+          .filter(book => {
+            if (book.status !== "finished" || !book.completedAt) return false;
+            const completedDate = formatDateString(book.completedAt);
+            return completedDate >= fromDate && completedDate <= clampedToDate;
+          })
+          .map(async (book) => {
+            try {
+              const stats = await storage.getReadingStats(book.id);
+              const daysToFinish = book.startedAt && book.completedAt ? 
+                Math.ceil((book.completedAt.getTime() - book.startedAt.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+              
+              return {
+                id: book.id,
+                title: book.title,
+                daysToFinish,
+                avgPph: stats.averagePagesPerHour,
+                completedAt: book.completedAt,
+              };
+            } catch (error) {
+              console.error(`Error calculating stats for finished book ${book.id}:`, error);
+              return {
+                id: book.id,
+                title: book.title,
+                daysToFinish: 0,
+                avgPph: 0,
+                completedAt: book.completedAt,
+              };
+            }
+          })
+      );
+      
+      // Get active books with ETAs
+      const activeEtas = await Promise.all(
+        activeBooks.map(async (book) => {
+          try {
+            const progress = await storage.calculateProgress(book.id);
+            const progressPct = book.totalPages ? (book.currentPage || 0) / book.totalPages : 0;
+            
+            return {
+              bookId: book.id,
+              title: book.title,
+              progressPct: Math.round(progressPct * 100),
+              etaDate: progress.eta ? formatDateString(progress.eta) : null,
+              bitePages: progress.dailyTarget || 1,
+            };
+          } catch (error) {
+            console.error(`Error calculating progress for book ${book.id}:`, error);
+            return {
+              bookId: book.id,
+              title: book.title,
+              progressPct: 0,
+              etaDate: null,
+              bitePages: 1,
+            };
+          }
+        })
+      );
+      
+      // Create sparkline data with zero-fill
+      const sparkline = fullDailyTotals.map(day => ({
+        date: day.date,
+        pages: day.pages,
+      }));
+      
+      // Create heatmap data with zero-fill
+      const heatmap = fullDailyTotals.map(day => ({
+        date: day.date,
+        pages: day.pages,
+        minutes: day.minutes,
+      }));
+      
+      // Goal calculation based on range
+      const daysInRange = allDatesInRange.length;
+      const avgPagesPerDay = totals.pages / Math.max(1, daysInRange);
+      
+      const goals = {
+        targetPages: Math.round(avgPagesPerDay * 30), // Extrapolate to 30 days
+        targetMinutes: Math.round((totals.minutes / Math.max(1, daysInRange)) * 30),
+        biteTargetPerDay: Math.max(1, Math.round(avgPagesPerDay)),
+      };
+      
+      res.json({
+        totals,
+        goals,
+        streak,
+        finishedBooks: finishedBooks
+          .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime())
+          .map(book => ({ id: book.id, title: book.title, daysToFinish: book.daysToFinish, avgPph: book.avgPph })),
+        activeEtas,
+        sparkline,
+        heatmap,
+        range: { from: fromDate, to: clampedToDate },
+      });
+    } catch (error) {
+      console.error("Error fetching stats overview:", error);
+      res.status(500).json({ error: "Failed to fetch stats overview" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
