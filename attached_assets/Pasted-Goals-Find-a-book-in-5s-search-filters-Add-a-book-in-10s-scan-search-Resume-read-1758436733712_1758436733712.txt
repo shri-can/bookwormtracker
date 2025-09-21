@@ -1,0 +1,51 @@
+Goals 
+	•	Find a book in <5s (search + filters).
+	•	Add a book in <10s (scan/search).
+	•	Resume reading in 1 tap.
+	•	Manage the backlog without clutter (facets + sane defaults).
+Why: fewer choices → faster decisions (Hick’s Law), and UIs should favor recognition over recall.  ￼
+
+Information architecture (top → bottom)
+	1.	Header row
+	•	Search input (focus on “/”)
+	•	Status chips: To-Read, Reading, On-Hold, DNF, Finished (multi-select)
+	•	Sort: Priority ▾ (Priority, Recently Added, Title, Author, Last Read, Progress)
+	•	View: Grid/List toggle
+	•	Bulk Select: enters selection mode (checkboxes on cards)
+	2.	Book grid/list
+	•	Card essentials: Cover, Title, Author, Status chip, Progress bar, “Continue”/“Start” primary button.
+	•	Overflow menu: Edit details, Move shelf (status), Add note, Delete.
+	•	Long-press/Shift-click → multi-select.
+	3.	Bulk toolbar (appears when >0 selected)
+	•	Change Status, Add Tag, Delete, Export (.csv / .json)
+	4.	Empty state (first-run or zero results)
+	•	Big CTAs: Scan ISBN / Search by title/author
+	•	One demo book to teach the UI; link to bulk import.
+Why: empty states should teach and route to key actions.  ￼
+	5.	Filter tray (mobile)
+	•	Slide-over with facets: Status, Format, Genre, Tags, Language, Year.
+Why: faceted search beats single filters at scale; trays work well on mobile.  ￼
+
+Interaction rules (minimal friction)
+	•	Progressive disclosure: only core controls visible; advanced filters live in the tray.  ￼
+	•	Recognition > recall: last-used sort persists; recently used filters surface as chips; quick “+Tag” suggestions.  ￼
+	•	Tap targets ≥ 44px; no tiny icons for primary actions. (Fitts & mobile target size.)  ￼
+	•	Keyboard: “/” focus search, “f” open filters, “v” grid/list, “Esc” clear.
+
+Data you’ll need (incremental to your current schema)
+	•	Book: status (‘toRead’|‘reading’|‘onHold’|‘dnf’|‘finished’), priority (1–5), tags[], format (‘paper’|‘ebook’|‘audio’), language, addedAt, lastReadAt, progress (0–1), coverUrl.
+	•	Store view state in URL query (search, status[], sort, view), so reloads and share links preserve the state.  Acceptance criteria (you can test these quickly)
+	•	Typing / focuses search; clearing search restores previous filter state.
+	•	Selecting “Reading + To-Read” filters instantly; chips show counts (optional).
+	•	Changing sort does not reset filters.
+	•	Grid/List choice persists across reloads.
+	•	Long-press (or checkbox) enters bulk mode; Bulk bar appears with “Change Status / Add Tag / Delete.”
+	•	250ms debounce on search; URL updates reflect current state.
+	•	With 1,000 mocked books, scroll stays >55 FPS (virtualized).
+	•	All primary actions are ≥44px touch targets.  
+	•	Screen is fully usable with keyboard only (Tab/Shift+Tab/Enter/Esc).
+
+Copy & micro-interactions (keep it calm)
+	•	Primary buttons use verbs: Continue, Start, Move to Finished (avoid jargon).
+	•	Inline toasts for actions (“Moved to Finished” with Undo).
+	•	No modals for destructive actions when Undo exists (faster recovery).

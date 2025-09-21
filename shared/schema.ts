@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -16,6 +16,17 @@ export const books = pgTable("books", {
   notes: text("notes").array().default([]),
   startedAt: timestamp("started_at"),
   completedAt: timestamp("completed_at"),
+  
+  // New fields for enhanced library management
+  status: text("status").notNull().default("toRead"), // 'toRead'|'reading'|'onHold'|'dnf'|'finished'
+  priority: integer("priority").default(3), // 1-5 scale
+  tags: text("tags").array().default([]),
+  format: text("format").default("paper"), // 'paper'|'ebook'|'audio'
+  language: text("language").default("English"),
+  addedAt: timestamp("added_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  lastReadAt: timestamp("last_read_at"),
+  progress: real("progress").default(0), // 0-1 decimal for percentage
+  coverUrl: text("cover_url"),
 });
 
 export const readingSessions = pgTable("reading_sessions", {
@@ -40,13 +51,38 @@ export const BOOK_GENRES = [
   "Biography/Memoir"
 ] as const;
 
+// Define book status options
+export const BOOK_STATUSES = [
+  "toRead",
+  "reading", 
+  "onHold",
+  "dnf",
+  "finished"
+] as const;
+
+// Define book format options
+export const BOOK_FORMATS = [
+  "paper",
+  "ebook",
+  "audio"
+] as const;
+
 export const genreEnum = z.enum(BOOK_GENRES);
+export const statusEnum = z.enum(BOOK_STATUSES);
+export const formatEnum = z.enum(BOOK_FORMATS);
 
 export const insertBookSchema = createInsertSchema(books).omit({
   id: true,
+  addedAt: true, // Auto-generated
 }).extend({
   genre: genreEnum,
+  status: statusEnum.default("toRead"),
+  format: formatEnum.default("paper"),
+  priority: z.number().int().min(1).max(5).default(3),
+  progress: z.number().min(0).max(1).default(0),
+  language: z.string().default("English"),
   topics: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
+  tags: z.array(z.string().trim().min(1).max(30)).max(15).default([]),
 });
 
 export const updateBookSchema = insertBookSchema.partial();
