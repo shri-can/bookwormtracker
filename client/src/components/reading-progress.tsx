@@ -27,6 +27,7 @@ interface ReadingProgressProps {
   sessions?: ReadingSession[];
   onUpdateProgress?: (id: string, newPage: number) => void;
   onAddSession?: (id: string, session: { startPage: number; endPage: number; notes?: string }) => void;
+  onEditSession?: (id: string, sessionId: string, updates: { startPage: number; endPage: number; notes?: string }) => void;
 }
 
 export function ReadingProgress({
@@ -39,6 +40,7 @@ export function ReadingProgress({
   sessions = [],
   onUpdateProgress,
   onAddSession,
+  onEditSession,
 }: ReadingProgressProps) {
   const [newPage, setNewPage] = useState(currentPage);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -75,6 +77,10 @@ export function ReadingProgress({
 
   const handleAddSession = (session: { startPage: number; endPage: number; notes?: string }) => {
     onAddSession?.(id, session);
+  };
+
+  const handleEditSession = (sessionId: string, updates: { startPage: number; endPage: number; notes?: string }) => {
+    onEditSession?.(id, sessionId, updates);
   };
 
   return (
@@ -185,6 +191,7 @@ export function ReadingProgress({
               currentPage={currentPage}
               sessions={sessions}
               onAddSession={handleAddSession}
+              onEditSession={handleEditSession}
             />
           </TabsContent>
         </Tabs>

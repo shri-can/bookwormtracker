@@ -110,6 +110,31 @@ export default function CurrentlyReading() {
     console.log(`Added reading session for book ${id}: pages ${session.startPage}-${session.endPage}`);
   };
 
+  const handleEditSession = (bookId: string, sessionId: string, updates: { startPage: number; endPage: number; notes?: string }) => {
+    setBooks(prev => prev.map(book => {
+      if (book.id === bookId) {
+        const updatedSessions = (book.sessions || []).map(session => 
+          session.id === sessionId 
+            ? { ...session, ...updates }
+            : session
+        );
+        
+        // Recalculate current page based on all sessions
+        const maxPageFromSessions = updatedSessions.reduce((max, session) => 
+          Math.max(max, session.endPage), 0
+        );
+        
+        return {
+          ...book,
+          sessions: updatedSessions,
+          currentPage: Math.max(book.currentPage, maxPageFromSessions)
+        };
+      }
+      return book;
+    }));
+    console.log(`Edited session ${sessionId} for book ${bookId}: pages ${updates.startPage}-${updates.endPage}`);
+  };
+
   const totalPages = books.reduce((sum, book) => sum + book.totalPages, 0);
   const totalReadPages = books.reduce((sum, book) => sum + book.currentPage, 0);
   const overallProgress = totalPages > 0 ? (totalReadPages / totalPages) * 100 : 0;
@@ -202,6 +227,7 @@ export default function CurrentlyReading() {
                   {...book}
                   onUpdateProgress={handleUpdateProgress}
                   onAddSession={handleAddSession}
+                  onEditSession={handleEditSession}
                 />
               ))}
             </div>
