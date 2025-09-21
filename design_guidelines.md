@@ -7,16 +7,16 @@
 
 ### Color Palette
 **Light Mode:**
-- Primary: 220 15% 25% (Deep slate for text and primary actions)
-- Secondary: 220 10% 45% (Medium gray for secondary text)
-- Background: 0 0% 98% (Warm white)
-- Accent: 25 85% 55% (Warm orange for progress indicators)
+- Primary: 25 20% 20% (Deep warm brown for text and primary actions)
+- Secondary: 35 18% 40% (Warm medium brown for secondary text)
+- Background: 35 15% 97% (Warm cream white)
+- Accent: 20 85% 55% (Rich burnt orange for progress indicators)
 
 **Dark Mode:**
-- Primary: 220 15% 85% (Light gray for text)
-- Secondary: 220 10% 65% (Medium light gray)
-- Background: 220 15% 8% (Deep charcoal)
-- Accent: 25 75% 60% (Softer orange for dark mode)
+- Primary: 35 15% 85% (Warm light cream for text)
+- Secondary: 35 15% 65% (Medium warm gray)
+- Background: 25 25% 6% (Deep warm charcoal)
+- Accent: 20 75% 65% (Softer warm orange for dark mode)
 
 ### Typography
 - **Primary Font**: Inter (clean, readable)
