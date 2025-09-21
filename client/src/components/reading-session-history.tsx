@@ -16,17 +16,27 @@ interface ReadingSession {
 
 interface ReadingSessionHistoryProps {
   bookId: string;
+  currentPage: number;
   sessions: ReadingSession[];
   onAddSession?: (session: { startPage: number; endPage: number; notes?: string }) => void;
 }
 
-export function ReadingSessionHistory({ bookId, sessions, onAddSession }: ReadingSessionHistoryProps) {
+export function ReadingSessionHistory({ bookId, currentPage, sessions, onAddSession }: ReadingSessionHistoryProps) {
   const [isAddingSession, setIsAddingSession] = useState(false);
   const [newSession, setNewSession] = useState({
     startPage: "",
     endPage: "", 
     notes: "",
   });
+
+  const handleStartAddingSession = () => {
+    setNewSession({
+      startPage: currentPage.toString(),
+      endPage: "",
+      notes: "",
+    });
+    setIsAddingSession(true);
+  };
 
   const totalPagesRead = sessions.reduce((sum, session) => 
     sum + (session.endPage - session.startPage), 0
@@ -70,7 +80,7 @@ export function ReadingSessionHistory({ bookId, sessions, onAddSession }: Readin
           <Button 
             variant="outline" 
             size="sm"
-            onClick={() => setIsAddingSession(true)}
+            onClick={handleStartAddingSession}
             data-testid={`button-add-session-${bookId}`}
           >
             <Plus className="mr-2 h-4 w-4" />

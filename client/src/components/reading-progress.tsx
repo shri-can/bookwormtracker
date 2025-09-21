@@ -182,6 +182,7 @@ export function ReadingProgress({
           <TabsContent value="history" className="mt-4">
             <ReadingSessionHistory 
               bookId={id}
+              currentPage={currentPage}
               sessions={sessions}
               onAddSession={handleAddSession}
             />
