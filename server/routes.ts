@@ -820,6 +820,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Search books using Google Books API
+  app.get("/api/books/search", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.trim().length < 2) {
+        return res.status(400).json({ error: "Query must be at least 2 characters long" });
+      }
+
+      const searchUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=20&printType=books&orderBy=relevance`;
+      
+      const response = await fetch(searchUrl);
+      if (!response.ok) {
+        throw new Error(`Google Books API responded with status ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Transform Google Books API response to our format
+      const books = (data.items || []).map((item: any) => {
+        const volumeInfo = item.volumeInfo || {};
+        const imageLinks = volumeInfo.imageLinks || {};
+        
+        return {
+          googleId: item.id,
+          title: volumeInfo.title || 'Unknown Title',
+          authors: volumeInfo.authors || ['Unknown Author'],
+          description: volumeInfo.description || '',
+          publishedDate: volumeInfo.publishedDate || '',
+          pageCount: volumeInfo.pageCount || 0,
+          categories: volumeInfo.categories || [],
+          thumbnail: imageLinks.thumbnail || imageLinks.smallThumbnail || '',
+          isbn: volumeInfo.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13')?.identifier ||
+                volumeInfo.industryIdentifiers?.find((id: any) => id.type === 'ISBN_10')?.identifier || '',
+          publisher: volumeInfo.publisher || '',
+          language: volumeInfo.language || 'en',
+          averageRating: volumeInfo.averageRating || 0,
+          ratingsCount: volumeInfo.ratingsCount || 0,
+        };
+      });
+
+      res.json({ books, total: data.totalItems || 0 });
+    } catch (error) {
+      console.error("Error searching books:", error);
+      res.status(500).json({ error: "Failed to search books" });
+    }
+  });
+
+  // Add book from search result
+  app.post("/api/books/add-from-search", async (req, res) => {
+    try {
+      const searchResult = z.object({
+        googleId: z.string().optional(),
+        title: z.string(),
+        authors: z.array(z.string()).optional(),
+        author: z.string().optional(),
+        description: z.string().optional(),
+        publishedDate: z.string().optional(),
+        pageCount: z.number().optional(),
+        categories: z.array(z.string()).optional(),
+        thumbnail: z.string().optional(),
+        isbn: z.string().optional(),
+        publisher: z.string().optional(),
+        language: z.string().optional(),
+        averageRating: z.number().optional(),
+        ratingsCount: z.number().optional(),
+        genre: z.string().optional(),
+        status: z.string().optional(),
+        priority: z.string().optional(),
+        format: z.string().optional(),
+        totalPages: z.number().optional(),
+      }).parse(req.body);
+
+      // Extract main genre from categories and map to our genres
+      const mapToOurGenre = (category: string): string => {
+        const lowerCategory = category.toLowerCase();
+        if (lowerCategory.includes('fiction') || lowerCategory.includes('novel')) return 'Fiction';
+        if (lowerCategory.includes('business') || lowerCategory.includes('finance')) return 'Business / Finance';
+        if (lowerCategory.includes('self-help') || lowerCategory.includes('personal development')) return 'Self-Help / Personal Development';
+        if (lowerCategory.includes('philosophy') || lowerCategory.includes('spirituality')) return 'Philosophy / Spirituality';
+        if (lowerCategory.includes('psychology')) return 'Psychology / Self-Improvement';
+        if (lowerCategory.includes('history') || lowerCategory.includes('culture')) return 'History / Culture';
+        if (lowerCategory.includes('science') || lowerCategory.includes('technology')) return 'Science / Technology';
+        if (lowerCategory.includes('biography') || lowerCategory.includes('memoir')) return 'Biography/Memoir';
+        return 'General Non-Fiction';
+      };
+      
+      const genre = searchResult.categories && searchResult.categories.length > 0 
+        ? mapToOurGenre(searchResult.categories[0])
+        : 'General Non-Fiction';
+
+      // Convert search result to book format
+      const bookData = {
+        title: searchResult.title,
+        author: Array.isArray(searchResult.authors) ? searchResult.authors.join(', ') : searchResult.author || 'Unknown Author',
+        genre: genre,
+        status: 'toRead' as const,
+        priority: 3, // medium priority
+        format: 'paper' as const,
+        totalPages: searchResult.pageCount || 0,
+        currentPage: 0,
+        notes: searchResult.description || '',
+        tags: searchResult.categories || [],
+        progress: 0,
+        topics: searchResult.categories || [],
+        language: searchResult.language || 'en',
+      };
+
+      const book = await storage.createBook(bookData);
+      res.status(201).json(book);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          error: "Invalid book data", 
+          details: error.errors 
+        });
+      }
+      console.error("Error adding book from search:", error);
+      res.status(500).json({ error: "Failed to add book" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
