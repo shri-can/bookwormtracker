@@ -299,6 +299,29 @@ export default function Library() {
 
   const handleViewDetails = (id: string) => {
     console.log("View details for book:", id);
+    // TODO: Navigate to book details page
+  };
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await updateBookMutation.mutateAsync({
+        id,
+        updates: { 
+          status: newStatus as any,
+          lastReadAt: newStatus === "reading" ? new Date() : undefined,
+        }
+      });
+      toast({ title: `Status changed to ${newStatus}` });
+    } catch (error) {
+      console.error("Failed to change status:", error);
+      toast({ title: "Failed to change status", variant: "destructive" });
+    }
+  };
+
+  const handleEditBook = (id: string) => {
+    console.log("Edit book:", id);
+    // TODO: Open edit dialog for the book
+    toast({ title: "Edit functionality coming soon" });
   };
 
   // Filter functions
@@ -658,6 +681,8 @@ export default function Library() {
               onContinueReading={handleContinueReading}
               onViewDetails={handleViewDetails}
               onDelete={handleDeleteBook}
+              onEdit={handleEditBook}
+              onStatusChange={handleStatusChange}
             />
           ))}
         </div>

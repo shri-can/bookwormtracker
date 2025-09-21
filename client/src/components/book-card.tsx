@@ -40,6 +40,8 @@ interface BookCardProps extends Omit<Book, 'topics' | 'tags'> {
   onContinueReading?: (id: string) => void;
   onViewDetails?: (id: string) => void;
   onDelete?: (id: string) => void;
+  onEdit?: (id: string) => void;
+  onStatusChange?: (id: string, newStatus: string) => void;
 }
 
 // Status configuration with colors and icons
@@ -98,6 +100,8 @@ export function BookCard({
   onContinueReading,
   onViewDetails,
   onDelete,
+  onEdit,
+  onStatusChange,
 }: BookCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   
@@ -128,6 +132,25 @@ export function BookCard({
 
   const handleDelete = () => {
     onDelete?.(id);
+  };
+
+  const handleEdit = () => {
+    onEdit?.(id);
+  };
+
+  const handleStatusChange = () => {
+    const nextStatus = status === "toRead" ? "reading" : "toRead";
+    onStatusChange?.(id, nextStatus);
+  };
+
+  const handleStatusBadgeClick = () => {
+    onStatusChange?.(id, getNextStatus(status));
+  };
+
+  const getNextStatus = (currentStatus: string) => {
+    const statusOrder = ["toRead", "reading", "onHold", "finished", "dnf"];
+    const currentIndex = statusOrder.indexOf(currentStatus);
+    return statusOrder[(currentIndex + 1) % statusOrder.length];
   };
 
   const getPrimaryButtonText = () => {
@@ -179,7 +202,11 @@ export function BookCard({
               
               <div className="flex items-center gap-2 ml-4">
                 {/* Status badge */}
-                <Badge className={statusConfig?.color} data-testid={`badge-status-${id}`}>
+                <Badge 
+                  className={`${statusConfig?.color} cursor-pointer hover-elevate`} 
+                  onClick={handleStatusBadgeClick}
+                  data-testid={`badge-status-${id}`}
+                >
                   <StatusIcon className="h-3 w-3 mr-1" />
                   {statusConfig?.label}
                 </Badge>
@@ -293,11 +320,11 @@ export function BookCard({
               <BookOpen className="mr-2 h-4 w-4" />
               View Details
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleEdit}>
               <Edit className="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleStatusChange}>
               <RotateCcw className="mr-2 h-4 w-4" />
               Move to {status === "toRead" ? "Reading" : "To-Read"}
             </DropdownMenuItem>
@@ -320,7 +347,11 @@ export function BookCard({
         
         {/* Status and priority */}
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={statusConfig?.color} data-testid={`badge-status-${id}`}>
+          <Badge 
+            className={`${statusConfig?.color} cursor-pointer hover-elevate`} 
+            onClick={handleStatusBadgeClick}
+            data-testid={`badge-status-${id}`}
+          >
             <StatusIcon className="h-3 w-3 mr-1" />
             {statusConfig?.label}
           </Badge>
