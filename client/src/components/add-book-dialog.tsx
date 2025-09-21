@@ -33,19 +33,11 @@ import { Plus, Sparkles, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { BOOK_GENRES, genreEnum } from "@shared/schema";
+import { BOOK_GENRES, BOOK_STATUSES, BOOK_FORMATS, insertBookSchema } from "@shared/schema";
 import { bookSearchService } from "@/services/bookSearch";
 
-const addBookSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  author: z.string().min(1, "Author is required"),
-  genre: genreEnum,
-  topics: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
-  usefulness: z.string().optional(),
-  totalPages: z.number().min(1, "Total pages must be at least 1").optional(),
-  isCurrentlyReading: z.boolean().default(false),
-  currentPage: z.number().min(0, "Current page cannot be negative").optional(),
-});
+// Use the shared insertBookSchema from the backend
+const addBookSchema = insertBookSchema;
 
 type AddBookForm = z.infer<typeof addBookSchema>;
 
@@ -67,10 +59,16 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
       author: "",
       genre: "General Non-Fiction",
       topics: [],
+      tags: [],
       usefulness: "",
       totalPages: undefined,
       isCurrentlyReading: false,
       currentPage: 0,
+      status: "toRead",
+      priority: 3,
+      format: "paper",
+      language: "English",
+      progress: 0,
     },
   });
 
@@ -110,6 +108,31 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
     form.reset();
     setHasAutoFetched(false);
     setTopicInput("");
+  };
+
+  const [tagInput, setTagInput] = useState("");
+
+  const addTag = (tag: string) => {
+    const trimmedTag = tag.trim();
+    if (!trimmedTag) return;
+    
+    const currentTags = form.getValues("tags");
+    if (!currentTags.includes(trimmedTag)) {
+      form.setValue("tags", [...currentTags, trimmedTag]);
+    }
+    setTagInput("");
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    const currentTags = form.getValues("tags");
+    form.setValue("tags", currentTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleTagKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTag(tagInput);
+    }
   };
 
   const addTopic = (topic: string) => {
@@ -284,6 +307,145 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
                 </FormItem>
               )}
             />
+            <FormField
+              control={form.control}
+              name="tags"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tags</FormLabel>
+                  <FormControl>
+                    <div className="space-y-2">
+                      <Input
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleTagKeyPress}
+                        placeholder="Enter tags (press Enter or comma to add)"
+                        data-testid="input-book-tags"
+                      />
+                      {field.value.length > 0 && (
+                        <div className="flex flex-wrap gap-2" data-testid="tags-display">
+                          {field.value.map((tag, index) => (
+                            <Badge 
+                              key={index} 
+                              variant="secondary" 
+                              className="text-sm"
+                              data-testid={`tag-badge-${index}`}
+                            >
+                              {tag}
+                              <button
+                                type="button"
+                                onClick={() => removeTag(tag)}
+                                className="ml-1 hover:text-destructive"
+                                data-testid={`button-remove-tag-${index}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-book-status">
+                          <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {BOOK_STATUSES.map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {status === "toRead" ? "To Read" : 
+                             status === "reading" ? "Reading" :
+                             status === "onHold" ? "On Hold" :
+                             status === "dnf" ? "DNF" :
+                             "Finished"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="priority"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Priority (1-5)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        max="5" 
+                        placeholder="3" 
+                        {...field}
+                        value={field.value || 3}
+                        onChange={(e) => field.onChange(parseInt(e.target.value) || 3)}
+                        data-testid="input-priority"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="format"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Format</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-book-format">
+                          <SelectValue placeholder="Select format" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {BOOK_FORMATS.map((format) => (
+                          <SelectItem key={format} value={format}>
+                            {format === "paper" ? "Paper" : 
+                             format === "ebook" ? "E-book" : "Audiobook"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="language"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Language</FormLabel>
+                    <FormControl>
+                      <Input 
+                        placeholder="English" 
+                        {...field}
+                        data-testid="input-language"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
             <FormField
               control={form.control}
               name="usefulness"
