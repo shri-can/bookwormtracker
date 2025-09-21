@@ -15,6 +15,9 @@ import {
   type InsertDailyTotals,
   type DailyBookTotals,
   type InsertDailyBookTotals,
+  type ReadingGoal,
+  type InsertReadingGoal,
+  type UpdateReadingGoal,
   type StartSessionRequest,
   type PauseSessionRequest,
   type StopSessionRequest,
@@ -106,6 +109,13 @@ export interface IStorage {
   upsertDailyBookTotals(date: string, bookId: string, pages: number, minutes: number, sessions: number): Promise<DailyBookTotals>;
   getDailyTotalsInRange(startDate: string, endDate: string): Promise<DailyTotals[]>;
   getDailyBookTotalsInRange(startDate: string, endDate: string, bookId?: string): Promise<DailyBookTotals[]>;
+
+  // Reading Goals
+  getAllReadingGoals(): Promise<ReadingGoal[]>;
+  getReadingGoalById(id: string): Promise<ReadingGoal | null>;
+  createReadingGoal(goal: InsertReadingGoal): Promise<ReadingGoal>;
+  updateReadingGoal(id: string, updates: UpdateReadingGoal): Promise<ReadingGoal>;
+  deleteReadingGoal(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -115,6 +125,7 @@ export class MemStorage implements IStorage {
   private readingStates: Map<string, BookReadingState>;
   private dailyTotals: Map<string, DailyTotals>;
   private dailyBookTotals: Map<string, DailyBookTotals>;
+  private readingGoals: Map<string, ReadingGoal>;
 
   constructor() {
     this.books = new Map();
@@ -123,6 +134,7 @@ export class MemStorage implements IStorage {
     this.readingStates = new Map();
     this.dailyTotals = new Map();
     this.dailyBookTotals = new Map();
+    this.readingGoals = new Map();
   }
 
   async getBook(id: string): Promise<Book | undefined> {
@@ -874,6 +886,52 @@ export class MemStorage implements IStorage {
     }
     
     return totals.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  // Reading Goals Implementation
+  async getAllReadingGoals(): Promise<ReadingGoal[]> {
+    return Array.from(this.readingGoals.values()).sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }
+
+  async getReadingGoalById(id: string): Promise<ReadingGoal | null> {
+    return this.readingGoals.get(id) || null;
+  }
+
+  async createReadingGoal(goal: InsertReadingGoal): Promise<ReadingGoal> {
+    const newGoal: ReadingGoal = {
+      id: randomUUID(),
+      ...goal,
+      current: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.readingGoals.set(newGoal.id, newGoal);
+    return newGoal;
+  }
+
+  async updateReadingGoal(id: string, updates: UpdateReadingGoal): Promise<ReadingGoal> {
+    const existing = this.readingGoals.get(id);
+    if (!existing) {
+      throw new Error(`Reading goal with id ${id} not found`);
+    }
+    
+    const updated: ReadingGoal = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date(),
+    };
+    
+    this.readingGoals.set(id, updated);
+    return updated;
+  }
+
+  async deleteReadingGoal(id: string): Promise<void> {
+    if (!this.readingGoals.has(id)) {
+      throw new Error(`Reading goal with id ${id} not found`);
+    }
+    this.readingGoals.delete(id);
   }
 }
 

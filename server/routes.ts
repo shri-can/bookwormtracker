@@ -14,7 +14,9 @@ import {
   startSessionSchema,
   pauseSessionSchema,
   stopSessionSchema,
-  quickAddPagesSchema
+  quickAddPagesSchema,
+  insertReadingGoalSchema,
+  updateReadingGoalSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -1145,6 +1147,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error exporting books:", error);
       res.status(500).json({ error: "Failed to export books" });
+    }
+  });
+
+  // Reading Goals API endpoints
+  app.get("/api/reading-goals", async (req, res) => {
+    try {
+      const goals = await storage.getAllReadingGoals();
+      res.json(goals);
+    } catch (error) {
+      console.error("Error fetching reading goals:", error);
+      res.status(500).json({ error: "Failed to fetch reading goals" });
+    }
+  });
+
+  app.post("/api/reading-goals", async (req, res) => {
+    try {
+      const goalData = insertReadingGoalSchema.parse(req.body);
+      const goal = await storage.createReadingGoal(goalData);
+      res.status(201).json(goal);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid goal data", details: error.errors });
+      }
+      console.error("Error creating reading goal:", error);
+      res.status(500).json({ error: "Failed to create reading goal" });
+    }
+  });
+
+  app.patch("/api/reading-goals/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = updateReadingGoalSchema.parse(req.body);
+      const goal = await storage.updateReadingGoal(id, updates);
+      res.json(goal);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid goal data", details: error.errors });
+      }
+      console.error("Error updating reading goal:", error);
+      res.status(500).json({ error: "Failed to update reading goal" });
+    }
+  });
+
+  app.delete("/api/reading-goals/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteReadingGoal(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting reading goal:", error);
+      res.status(500).json({ error: "Failed to delete reading goal" });
     }
   });
 

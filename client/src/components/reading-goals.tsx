@@ -12,21 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Target, Calendar, BookOpen, TrendingUp, Plus, Edit, Trash2, Award } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { Book } from "@shared/schema";
-
-interface ReadingGoal {
-  id: string;
-  title: string;
-  description?: string;
-  type: 'books' | 'pages' | 'minutes';
-  target: number;
-  current: number;
-  period: 'daily' | 'weekly' | 'monthly' | 'yearly';
-  startDate: string;
-  endDate: string;
-  isActive: boolean;
-  createdAt: string;
-}
+import type { Book, ReadingGoal, InsertReadingGoal } from "@shared/schema";
 
 interface ReadingGoalsProps {
   books: Book[];
@@ -48,8 +34,8 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
   });
 
   const createGoalMutation = useMutation({
-    mutationFn: async (goal: Omit<ReadingGoal, 'id' | 'current' | 'createdAt'>) => {
-      const response = await apiRequest('/api/reading-goals', 'POST', goal);
+    mutationFn: async (goal: InsertReadingGoal) => {
+      const response = await apiRequest('POST', '/api/reading-goals', goal);
       return response.json();
     },
     onSuccess: () => {
@@ -62,7 +48,7 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
 
   const updateGoalMutation = useMutation({
     mutationFn: async ({ id, updates }: { id: string; updates: Partial<ReadingGoal> }) => {
-      const response = await apiRequest(`/api/reading-goals/${id}`, 'PATCH', updates);
+      const response = await apiRequest('PATCH', `/api/reading-goals/${id}`, updates);
       return response.json();
     },
     onSuccess: () => {
@@ -75,7 +61,7 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
 
   const deleteGoalMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest(`/api/reading-goals/${id}`, 'DELETE');
+      await apiRequest('DELETE', `/api/reading-goals/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/reading-goals'] });
@@ -116,7 +102,7 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
     });
   };
 
-  const handleCreateGoal = () => {
+  const handleCreateGoal = async () => {
     if (!goalForm.title || goalForm.target <= 0) {
       toast({
         title: "Please fill in all required fields",
@@ -125,13 +111,30 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
       return;
     }
 
-    if (editingGoal) {
-      updateGoalMutation.mutate({
-        id: editingGoal.id,
-        updates: goalForm,
+    if (!goalForm.startDate || !goalForm.endDate) {
+      toast({
+        title: "Please select valid start and end dates",
+        variant: "destructive",
       });
-    } else {
-      createGoalMutation.mutate(goalForm);
+      return;
+    }
+
+    try {
+      if (editingGoal) {
+        await updateGoalMutation.mutateAsync({
+          id: editingGoal.id,
+          updates: goalForm,
+        });
+      } else {
+        await createGoalMutation.mutateAsync(goalForm);
+      }
+    } catch (error) {
+      console.error("Error saving goal:", error);
+      toast({
+        title: "Failed to save reading goal",
+        description: "Please try again",
+        variant: "destructive",
+      });
     }
   };
 
@@ -339,7 +342,14 @@ export function ReadingGoals({ books }: ReadingGoalsProps) {
                   disabled={createGoalMutation.isPending || updateGoalMutation.isPending}
                   data-testid="button-save-goal"
                 >
-                  {editingGoal ? 'Update Goal' : 'Create Goal'}
+                  {createGoalMutation.isPending || updateGoalMutation.isPending ? (
+                    <>
+                      <div className="animate-spin mr-2 h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
+                      Saving...
+                    </>
+                  ) : (
+                    editingGoal ? 'Update Goal' : 'Create Goal'
+                  )}
                 </Button>
               </div>
             </div>

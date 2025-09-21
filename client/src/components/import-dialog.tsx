@@ -171,7 +171,7 @@ export function ImportDialog({ children }: ImportDialogProps) {
 
   const importMutation = useMutation({
     mutationFn: async (books: any[]) => {
-      const response = await apiRequest('/api/books/import', 'POST', {
+      const response = await apiRequest('POST', '/api/books/import', {
         books,
         options,
       });
