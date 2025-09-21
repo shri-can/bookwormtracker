@@ -59,6 +59,8 @@ export function QuickCaptureInline({
   const [addTag, setAddTag] = useState(false);
   const [newTag, setNewTag] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [bookSelectOpen, setBookSelectOpen] = useState(false);
+  const [typeSelectOpen, setTypeSelectOpen] = useState(false);
 
   // Fetch currently reading books for quick selection
   const { data: currentlyReadingBooks = [] } = useQuery({
@@ -160,37 +162,62 @@ export function QuickCaptureInline({
       <CardContent className="p-4 space-y-4">
         {/* Note content input */}
         <div className="space-y-2">
+          <Label htmlFor="note-content" className="text-sm font-medium">Note content</Label>
           <Textarea
+            id="note-content"
             placeholder={`Write your ${selectedType.label.toLowerCase()}...`}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onKeyDown={handleKeyPress}
             className="min-h-[80px] resize-none"
             data-testid="textarea-note-content"
+            aria-describedby="content-help"
           />
-          <div className="text-xs text-muted-foreground">
+          <div id="content-help" className="text-xs text-muted-foreground">
             ⌘+Enter to save • {content.length} characters
           </div>
         </div>
 
         {/* Book and page selectors */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="col-span-2">
-            <Select value={selectedBook} onValueChange={setSelectedBook}>
-              <SelectTrigger data-testid="select-note-book">
+          <div className="col-span-2 space-y-2">
+            <Label htmlFor="select-note-book-trigger">Book</Label>
+            <Select 
+              value={selectedBook} 
+              onValueChange={setSelectedBook}
+              open={bookSelectOpen}
+              onOpenChange={setBookSelectOpen}
+            >
+              <SelectTrigger 
+                id="select-note-book-trigger"
+                data-testid="select-note-book"
+                aria-label="Select book"
+              >
                 <SelectValue placeholder="Select book" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent 
+                data-testid="listbox-note-book"
+                className="z-50"
+                position="popper"
+                sideOffset={4}
+                aria-labelledby="select-note-book-trigger"
+              >
                 {currentlyReadingBooks.map(book => (
-                  <SelectItem key={book.id} value={book.id}>
+                  <SelectItem 
+                    key={book.id} 
+                    value={book.id}
+                    data-testid={`option-book-${book.id}`}
+                  >
                     {book.title} - {book.author}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-          <div>
+          <div className="space-y-2">
+            <Label htmlFor="note-page-input">Page</Label>
             <Input
+              id="note-page-input"
               type="number"
               placeholder="Page"
               value={page}
@@ -203,7 +230,7 @@ export function QuickCaptureInline({
         {/* Note type pills */}
         <div className="space-y-2">
           <Label className="text-sm font-medium">Type</Label>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap" role="radiogroup" aria-label="Note type">
             {NOTE_TYPES.map(type => {
               const Icon = type.icon;
               const isSelected = noteType === type.id;
@@ -215,6 +242,9 @@ export function QuickCaptureInline({
                   onClick={() => setNoteType(type.id)}
                   className={`${isSelected ? type.color : ''} gap-1`}
                   data-testid={`button-type-${type.id}`}
+                  role="radio"
+                  aria-checked={isSelected}
+                  aria-label={`Select ${type.label} type`}
                 >
                   <Icon className="h-3 w-3" />
                   {type.label}
@@ -233,11 +263,15 @@ export function QuickCaptureInline({
                 checked={makeRecall}
                 onCheckedChange={setMakeRecall}
                 data-testid="switch-make-recall"
+                aria-describedby="recall-help"
               />
               <Label htmlFor="make-recall" className="flex items-center gap-2">
                 <Brain className="h-4 w-4" />
                 Make Recall
               </Label>
+              <span id="recall-help" className="sr-only">
+                Turn this note into a spaced repetition flashcard for later review
+              </span>
             </div>
             <div className="flex items-center space-x-2">
               <Switch
@@ -245,34 +279,51 @@ export function QuickCaptureInline({
                 checked={addTag}
                 onCheckedChange={setAddTag}
                 data-testid="switch-add-tag"
+                aria-describedby="tag-help"
               />
               <Label htmlFor="add-tag">Add Tag</Label>
+              <span id="tag-help" className="sr-only">
+                Add tags to organize and filter this note
+              </span>
             </div>
           </div>
 
           {addTag && (
             <div className="space-y-2">
+              <Label htmlFor="new-tag-input" className="text-sm font-medium">Add tags</Label>
               <div className="flex gap-2">
                 <Input
+                  id="new-tag-input"
                   placeholder="Tag name"
                   value={newTag}
                   onChange={(e) => setNewTag(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
                   data-testid="input-new-tag"
+                  aria-describedby="tag-input-help"
                 />
-                <Button onClick={handleAddTag} size="sm" data-testid="button-add-tag">
+                <Button 
+                  onClick={handleAddTag} 
+                  size="sm" 
+                  data-testid="button-add-tag"
+                  disabled={!newTag.trim()}
+                >
                   Add
                 </Button>
               </div>
+              <div id="tag-input-help" className="text-xs text-muted-foreground">
+                Press Enter to add tag
+              </div>
               {tags.length > 0 && (
-                <div className="flex gap-1 flex-wrap">
+                <div className="flex gap-1 flex-wrap" aria-label="Current tags">
                   {tags.map(tag => (
                     <Badge
                       key={tag}
                       variant="secondary"
                       className="cursor-pointer"
                       onClick={() => removeTag(tag)}
-                      data-testid={`tag-${tag}`}
+                      data-testid={`chip-tag-${tag}`}
+                      role="button"
+                      aria-label={`Remove tag ${tag}`}
                     >
                       {tag} ×
                     </Badge>
@@ -286,13 +337,31 @@ export function QuickCaptureInline({
         {/* Secondary actions row */}
         <div className="flex items-center justify-between">
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" data-testid="button-dictate">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              data-testid="button-dictate"
+              aria-label="Dictate note"
+              title="Voice input (coming soon)"
+            >
               <Mic className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" data-testid="button-camera">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              data-testid="button-camera"
+              aria-label="Camera OCR"
+              title="Camera OCR (coming soon)"
+            >
               <Camera className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="sm" data-testid="button-clipboard">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              data-testid="button-clipboard"
+              aria-label="Paste from clipboard"
+              title="Paste from clipboard"
+            >
               <Clipboard className="h-4 w-4" />
             </Button>
           </div>
@@ -308,6 +377,7 @@ export function QuickCaptureInline({
                 setAddTag(false);
               }}
               data-testid="button-cancel-note"
+              disabled={createNoteMutation.isPending}
             >
               Cancel
             </Button>
@@ -315,6 +385,7 @@ export function QuickCaptureInline({
               onClick={handleSubmit}
               disabled={!content.trim() || !selectedBook || createNoteMutation.isPending}
               data-testid="button-save-note"
+              aria-busy={createNoteMutation.isPending}
             >
               {createNoteMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
