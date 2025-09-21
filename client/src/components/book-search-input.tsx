@@ -12,9 +12,10 @@ interface BookSearchInputProps {
   onChange: (value: string) => void;
   onBookSelect?: (book: {
     title: string;
-    author: string;
-    genre: string;
-    totalPages?: number;
+    authors: string[];
+    subjects: string[];
+    description?: string;
+    pageCount?: number;
     publishYear?: number;
   }) => void;
   placeholder?: string;
@@ -57,9 +58,10 @@ export function BookSearchInput({
       if (details && onBookSelect) {
         const bookData = {
           title: details.title,
-          author: details.authors.join(", ") || "",
-          genre: bookSearchService.getMainGenre(details.subjects),
-          totalPages: details.pageCount,
+          authors: details.authors,
+          subjects: details.subjects,
+          description: details.description,
+          pageCount: details.pageCount,
           publishYear: details.publishYear,
         };
         
@@ -73,9 +75,9 @@ export function BookSearchInput({
       if (onBookSelect) {
         const fallbackData = {
           title: suggestion.title,
-          author: suggestion.author_name?.[0] || "",
-          genre: bookSearchService.getMainGenre(suggestion.subject),
-          totalPages: suggestion.number_of_pages_median,
+          authors: suggestion.author_name || [],
+          subjects: suggestion.subject || [],
+          pageCount: suggestion.number_of_pages_median,
           publishYear: suggestion.first_publish_year,
         };
         onBookSelect(fallbackData);

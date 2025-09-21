@@ -127,7 +127,7 @@ export class BookSearchService {
       publishYear: suggestion.first_publish_year,
       pageCount: suggestion.number_of_pages_median,
       subjects: suggestion.subject || [],
-      coverUrl: suggestion.cover_i ? this.getCoverUrl(suggestion.cover_i, 'M') : undefined,
+      coverUrl: suggestion.cover_i ? this.getCoverUrl(suggestion.cover_i, 'M') || undefined : undefined,
     };
   }
 
@@ -136,77 +136,238 @@ export class BookSearchService {
     return `https://covers.openlibrary.org/b/id/${coverI}-${size}.jpg`;
   }
 
-  // Utility method to get a reasonable genre from subjects that matches form options
-  getMainGenre(subjects?: string[]): string {
-    if (!subjects || subjects.length === 0) return 'Other';
+  // Map subjects to one of our fixed genre options
+  getCanonicalGenre(subjects?: string[]): string {
+    if (!subjects || subjects.length === 0) return 'General Non-Fiction';
     
-    // Form genre options for exact matching
-    const formGenres = [
-      "Fiction", "Non-Fiction", "Science", "Technology", "Business", 
-      "Self-Help", "Biography", "History", "Philosophy", "Psychology", 
-      "Design", "Programming", "Other"
-    ];
-
-    // Mapping from common subject variations to form genres
+    // Define keyword mapping to our fixed genres
     const genreMapping: Record<string, string> = {
-      'non-fiction': 'Non-Fiction',
-      'nonfiction': 'Non-Fiction',
+      // Fiction keywords
+      'fiction': 'Fiction',
+      'novel': 'Fiction', 
       'science fiction': 'Fiction',
-      'sci-fi': 'Fiction',
       'fantasy': 'Fiction',
       'mystery': 'Fiction',
       'romance': 'Fiction',
       'horror': 'Fiction',
       'thriller': 'Fiction',
-      'computer science': 'Technology',
-      'computers': 'Technology',
-      'programming': 'Programming',
-      'software': 'Programming',
-      'web development': 'Programming',
-      'self help': 'Self-Help',
-      'self-improvement': 'Self-Help',
-      'personal development': 'Self-Help',
-      'business': 'Business',
-      'entrepreneurship': 'Business',
-      'management': 'Business',
-      'economics': 'Business',
-      'biography': 'Biography',
-      'autobiography': 'Biography',
-      'memoir': 'Biography',
-      'history': 'History',
-      'historical': 'History',
-      'philosophy': 'Philosophy',
-      'psychology': 'Psychology',
-      'design': 'Design',
-      'art': 'Design',
-      'graphic design': 'Design',
+      'adventure': 'Fiction',
+      'drama': 'Fiction',
+      'literary fiction': 'Fiction',
+      
+      // Self-Help / Personal Development
+      'self help': 'Self-Help / Personal Development',
+      'self-help': 'Self-Help / Personal Development',
+      'personal development': 'Self-Help / Personal Development',
+      'self improvement': 'Self-Help / Personal Development',
+      'self-improvement': 'Self-Help / Personal Development',
+      'motivation': 'Self-Help / Personal Development',
+      'productivity': 'Self-Help / Personal Development',
+      'habits': 'Self-Help / Personal Development',
+      
+      // Business / Finance
+      'business': 'Business / Finance',
+      'entrepreneurship': 'Business / Finance',
+      'management': 'Business / Finance',
+      'economics': 'Business / Finance',
+      'finance': 'Business / Finance',
+      'investing': 'Business / Finance',
+      'money': 'Business / Finance',
+      'leadership': 'Business / Finance',
+      'marketing': 'Business / Finance',
+      'startup': 'Business / Finance',
+      
+      // Philosophy / Spirituality  
+      'philosophy': 'Philosophy / Spirituality',
+      'spirituality': 'Philosophy / Spirituality',
+      'religion': 'Philosophy / Spirituality',
+      'meditation': 'Philosophy / Spirituality',
+      'wisdom': 'Philosophy / Spirituality',
+      'ethics': 'Philosophy / Spirituality',
+      'consciousness': 'Philosophy / Spirituality',
+      
+      // Psychology / Self-Improvement
+      'psychology': 'Psychology / Self-Improvement',
+      'cognitive science': 'Psychology / Self-Improvement',
+      'behavioral psychology': 'Psychology / Self-Improvement',
+      'mental health': 'Psychology / Self-Improvement',
+      'therapy': 'Psychology / Self-Improvement',
+      'mindfulness': 'Psychology / Self-Improvement',
+      'emotional intelligence': 'Psychology / Self-Improvement',
+      
+      // History / Culture
+      'history': 'History / Culture',
+      'culture': 'History / Culture',
+      'anthropology': 'History / Culture',
+      'sociology': 'History / Culture',
+      'civilization': 'History / Culture',
+      'world history': 'History / Culture',
+      'cultural studies': 'History / Culture',
+      
+      // Science / Technology
+      'science': 'Science / Technology',
+      'technology': 'Science / Technology',
+      'computer science': 'Science / Technology',
+      'programming': 'Science / Technology',
+      'physics': 'Science / Technology',
+      'biology': 'Science / Technology',
+      'chemistry': 'Science / Technology',
+      'mathematics': 'Science / Technology',
+      'engineering': 'Science / Technology',
+      'artificial intelligence': 'Science / Technology',
+      
+      // Biography/Memoir
+      'biography': 'Biography/Memoir',
+      'autobiography': 'Biography/Memoir',
+      'memoir': 'Biography/Memoir',
+      'memoirs': 'Biography/Memoir',
+      'personal narrative': 'Biography/Memoir',
     };
 
-    // First, try direct match with form genres (case insensitive)
+    // Check each subject for keyword matches
     for (const subject of subjects) {
       const normalizedSubject = subject.toLowerCase().trim();
       
-      // Check for exact match
-      const exactMatch = formGenres.find(genre => 
-        genre.toLowerCase() === normalizedSubject
-      );
-      if (exactMatch) return exactMatch;
-      
-      // Check mapping
+      // Direct match
       if (genreMapping[normalizedSubject]) {
         return genreMapping[normalizedSubject];
       }
       
-      // Check if subject contains any form genre
-      for (const genre of formGenres) {
-        if (normalizedSubject.includes(genre.toLowerCase())) {
+      // Partial match - check if subject contains any keywords
+      for (const [keyword, genre] of Object.entries(genreMapping)) {
+        if (normalizedSubject.includes(keyword)) {
           return genre;
         }
       }
     }
 
-    // If no match found, return "Other"
-    return 'Other';
+    // Check if any subjects suggest fiction (generic fiction indicators)
+    const fictionIndicators = ['juvenile', 'young adult', 'children', 'stories'];
+    for (const subject of subjects) {
+      const normalized = subject.toLowerCase();
+      if (fictionIndicators.some(indicator => normalized.includes(indicator))) {
+        return 'Fiction';
+      }
+    }
+
+    // Default fallback
+    return 'General Non-Fiction';
+  }
+
+  // Extract relevant topics from subjects and description
+  extractTopics(subjects?: string[], description?: string, maxTopics = 5): string[] {
+    const topics = new Set<string>();
+    
+    // Topic keywords to look for
+    const topicKeywords: Record<string, string> = {
+      'redemption': 'Redemption',
+      'betrayal': 'Betrayal', 
+      'cultural conflict': 'Cultural Conflict',
+      'identity': 'Identity',
+      'friendship': 'Friendship',
+      'trauma': 'Trauma',
+      'forgiveness': 'Forgiveness',
+      'immigration': 'Immigration',
+      'loyalty': 'Loyalty',
+      'guilt': 'Guilt',
+      'class': 'Social Class',
+      'war': 'War',
+      'resilience': 'Resilience',
+      'coming of age': 'Coming of Age',
+      'family': 'Family',
+      'love': 'Love',
+      'death': 'Death',
+      'power': 'Power',
+      'corruption': 'Corruption',
+      'survival': 'Survival',
+      'violence': 'Violence',
+      'justice': 'Justice',
+      'freedom': 'Freedom',
+      'oppression': 'Oppression',
+      'revolution': 'Revolution',
+      'leadership': 'Leadership',
+      'innovation': 'Innovation',
+      'success': 'Success',
+      'failure': 'Failure',
+      'courage': 'Courage',
+      'fear': 'Fear',
+      'hope': 'Hope',
+      'transformation': 'Transformation',
+      'self-discovery': 'Self-Discovery',
+      'relationships': 'Relationships',
+      'morality': 'Morality',
+      'sacrifice': 'Sacrifice',
+      'honor': 'Honor',
+      'tradition': 'Tradition',
+      'change': 'Change',
+      'conflict': 'Conflict',
+      'peace': 'Peace',
+      'loss': 'Loss',
+      'recovery': 'Recovery',
+      'growth': 'Personal Growth',
+      'purpose': 'Purpose',
+      'meaning': 'Meaning',
+      'truth': 'Truth',
+      'deception': 'Deception',
+    };
+
+    // Filter out noise from subjects and extract clean topics
+    const filterOutTerms = [
+      'fiction', 'nonfiction', 'non-fiction', 'novel', 'book', 'books', 'literature',
+      'english', 'american', 'british', 'juvenile', 'adult', 'young adult',
+      'textbook', 'study guide', 'guide', 'handbook', 'manual', 'reference',
+      'collection', 'anthology', 'series', 'volume', 'edition', 'revised',
+      'paperback', 'hardcover', 'ebook', 'audiobook', 'large print',
+      'accessible book', 'protected daisy', 'in library', 'borrowable',
+    ];
+
+    if (subjects) {
+      for (const subject of subjects) {
+        const normalized = subject.toLowerCase().trim();
+        
+        // Skip noise terms and very long/generic subjects
+        if (filterOutTerms.some(term => normalized.includes(term)) || 
+            normalized.length > 50 || 
+            /^\d{4}$/.test(normalized) || // Skip years
+            normalized.includes('accessible_book') ||
+            normalized.includes('protected_daisy')) {
+          continue;
+        }
+
+        // Check for topic keywords in subject
+        for (const [keyword, topic] of Object.entries(topicKeywords)) {
+          if (normalized.includes(keyword)) {
+            topics.add(topic);
+          }
+        }
+
+        // Add clean subjects as topics if they're concise and meaningful
+        if (normalized.length <= 25 && 
+            normalized.split(' ').length <= 3 &&
+            !normalized.includes('--') &&
+            normalized !== 'fiction' &&
+            normalized !== 'non-fiction') {
+          // Title case the subject
+          const titleCased = subject.split(' ')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+            .join(' ');
+          topics.add(titleCased);
+        }
+      }
+    }
+
+    // Check description for topic keywords
+    if (description) {
+      const descLower = description.toLowerCase();
+      for (const [keyword, topic] of Object.entries(topicKeywords)) {
+        if (descLower.includes(keyword)) {
+          topics.add(topic);
+        }
+      }
+    }
+
+    // Return top topics, limiting to maxTopics
+    return Array.from(topics).slice(0, maxTopics);
   }
 
   cancel() {

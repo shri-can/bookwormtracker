@@ -8,6 +8,7 @@ export const books = pgTable("books", {
   title: text("title").notNull(),
   author: text("author").notNull(),
   genre: text("genre").notNull(),
+  topics: text("topics").array().default([]),
   usefulness: text("usefulness"), // How the book might be useful
   totalPages: integer("total_pages"),
   isCurrentlyReading: boolean("is_currently_reading").default(false),
@@ -26,13 +27,29 @@ export const readingSessions = pgTable("reading_sessions", {
   notes: text("notes"),
 });
 
+// Define the fixed genre options
+export const BOOK_GENRES = [
+  "Fiction",
+  "Self-Help / Personal Development", 
+  "Business / Finance",
+  "Philosophy / Spirituality",
+  "Psychology / Self-Improvement",
+  "History / Culture",
+  "Science / Technology", 
+  "General Non-Fiction",
+  "Biography/Memoir"
+] as const;
+
+export const genreEnum = z.enum(BOOK_GENRES);
+
 export const insertBookSchema = createInsertSchema(books).omit({
   id: true,
+}).extend({
+  genre: genreEnum,
+  topics: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
 });
 
-export const updateBookSchema = createInsertSchema(books).omit({
-  id: true,
-}).partial();
+export const updateBookSchema = insertBookSchema.partial();
 
 export const insertReadingSessionSchema = createInsertSchema(readingSessions).omit({
   id: true,

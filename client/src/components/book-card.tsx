@@ -16,6 +16,7 @@ interface BookCardProps {
   title: string;
   author: string;
   genre: string;
+  topics?: string[];
   usefulness?: string;
   totalPages?: number;
   currentPage?: number;
@@ -30,6 +31,7 @@ export function BookCard({
   title,
   author,
   genre,
+  topics = [],
   usefulness,
   totalPages = 0,
   currentPage = 0,
@@ -88,12 +90,32 @@ export function BookCard({
         </DropdownMenu>
       </CardHeader>
       <CardContent className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline" data-testid={`badge-genre-${id}`}>{genre}</Badge>
           {isCurrentlyReading && (
             <Badge variant="default" data-testid={`badge-reading-status-${id}`}>Currently Reading</Badge>
           )}
         </div>
+        
+        {topics.length > 0 && (
+          <div className="flex flex-wrap gap-1" data-testid={`topics-display-${id}`}>
+            {topics.slice(0, 4).map((topic, index) => (
+              <Badge 
+                key={index} 
+                variant="secondary" 
+                className="text-xs"
+                data-testid={`topic-badge-${id}-${index}`}
+              >
+                {topic}
+              </Badge>
+            ))}
+            {topics.length > 4 && (
+              <Badge variant="secondary" className="text-xs" data-testid={`topic-more-${id}`}>
+                +{topics.length - 4} more
+              </Badge>
+            )}
+          </div>
+        )}
         
         {usefulness && (
           <p className="text-sm text-muted-foreground" data-testid={`text-usefulness-${id}`}>

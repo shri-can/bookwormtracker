@@ -28,15 +28,19 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { BookSearchInput } from "./book-search-input";
-import { Plus, Sparkles } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Sparkles, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { BOOK_GENRES, genreEnum } from "@shared/schema";
+import { bookSearchService } from "@/services/bookSearch";
 
 const addBookSchema = z.object({
   title: z.string().min(1, "Title is required"),
   author: z.string().min(1, "Author is required"),
-  genre: z.string().min(1, "Genre is required"),
+  genre: genreEnum,
+  topics: z.array(z.string().trim().min(1).max(40)).max(20).default([]),
   usefulness: z.string().optional(),
   totalPages: z.number().min(1, "Total pages must be at least 1").optional(),
   isCurrentlyReading: z.boolean().default(false),
@@ -44,22 +48,6 @@ const addBookSchema = z.object({
 });
 
 type AddBookForm = z.infer<typeof addBookSchema>;
-
-const genres = [
-  "Fiction",
-  "Non-Fiction", 
-  "Science",
-  "Technology",
-  "Business",
-  "Self-Help",
-  "Biography",
-  "History",
-  "Philosophy",
-  "Psychology",
-  "Design",
-  "Programming",
-  "Other"
-];
 
 interface AddBookDialogProps {
   onAddBook?: (book: AddBookForm) => void;
@@ -70,13 +58,15 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasAutoFetched, setHasAutoFetched] = useState(false);
+  const [topicInput, setTopicInput] = useState("");
 
   const form = useForm<AddBookForm>({
     resolver: zodResolver(addBookSchema),
     defaultValues: {
       title: "",
       author: "",
-      genre: "",
+      genre: "General Non-Fiction",
+      topics: [],
       usefulness: "",
       totalPages: undefined,
       isCurrentlyReading: false,
@@ -86,28 +76,63 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
 
   const handleBookSelect = (bookData: {
     title: string;
-    author: string;
-    genre: string;
-    totalPages?: number;
+    authors: string[];
+    subjects: string[];
+    description?: string;
+    pageCount?: number;
     publishYear?: number;
   }) => {
     // Auto-populate form fields with fetched book data
     form.setValue("title", bookData.title);
-    form.setValue("author", bookData.author);
-    if (bookData.genre) {
-      form.setValue("genre", bookData.genre);
-    }
-    if (bookData.totalPages) {
-      form.setValue("totalPages", bookData.totalPages);
+    form.setValue("author", bookData.authors.join(", "));
+    
+    // Use intelligent genre mapping
+    const suggestedGenre = bookSearchService.getCanonicalGenre(bookData.subjects);
+    form.setValue("genre", suggestedGenre as any);
+    
+    // Extract topics using intelligent extraction
+    const suggestedTopics = bookSearchService.extractTopics(bookData.subjects, bookData.description);
+    form.setValue("topics", suggestedTopics);
+    
+    if (bookData.pageCount) {
+      form.setValue("totalPages", bookData.pageCount);
     }
     
     setHasAutoFetched(true);
-    console.log("Auto-populated form with book data:", bookData);
+    console.log("Auto-populated form with book data:", {
+      ...bookData,
+      suggestedGenre,
+      suggestedTopics
+    });
   };
 
   const resetForm = () => {
     form.reset();
     setHasAutoFetched(false);
+    setTopicInput("");
+  };
+
+  const addTopic = (topic: string) => {
+    const trimmedTopic = topic.trim();
+    if (!trimmedTopic) return;
+    
+    const currentTopics = form.getValues("topics");
+    if (!currentTopics.includes(trimmedTopic)) {
+      form.setValue("topics", [...currentTopics, trimmedTopic]);
+    }
+    setTopicInput("");
+  };
+
+  const removeTopic = (topicToRemove: string) => {
+    const currentTopics = form.getValues("topics");
+    form.setValue("topics", currentTopics.filter(topic => topic !== topicToRemove));
+  };
+
+  const handleTopicKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addTopic(topicInput);
+    }
   };
 
   const onSubmit = async (data: AddBookForm) => {
@@ -205,13 +230,56 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {genres.map((genre) => (
-                        <SelectItem key={genre} value={genre}>
+                      {BOOK_GENRES.map((genre) => (
+                        <SelectItem key={genre} value={genre} data-testid={`option-genre-${genre.toLowerCase().replace(/\s+/g, '-').replace(/\//g, '-')}`}>
                           {genre}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="topics"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Topics</FormLabel>
+                  <FormControl>
+                    <div className="space-y-2">
+                      <Input
+                        value={topicInput}
+                        onChange={(e) => setTopicInput(e.target.value)}
+                        onKeyDown={handleTopicKeyPress}
+                        placeholder="Enter topics (press Enter or comma to add)"
+                        data-testid="input-book-topics"
+                      />
+                      {field.value.length > 0 && (
+                        <div className="flex flex-wrap gap-2" data-testid="topics-display">
+                          {field.value.map((topic, index) => (
+                            <Badge 
+                              key={index} 
+                              variant="secondary" 
+                              className="text-sm"
+                              data-testid={`topic-badge-${index}`}
+                            >
+                              {topic}
+                              <button
+                                type="button"
+                                onClick={() => removeTopic(topic)}
+                                className="ml-1 hover:text-destructive"
+                                data-testid={`button-remove-topic-${index}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
