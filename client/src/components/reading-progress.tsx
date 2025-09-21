@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ReadingSessionHistory } from "./reading-session-history";
-import { BookOpen, Clock, Target, TrendingUp } from "lucide-react";
+import { BookOpen, Clock, Target, TrendingUp, Lightbulb } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
 interface ReadingSession {
@@ -43,6 +43,11 @@ export function ReadingProgress({
   const [newPage, setNewPage] = useState(currentPage);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Sync input with current page when it changes via sessions
+  useEffect(() => {
+    setNewPage(currentPage);
+  }, [currentPage]);
+
   const progress = (currentPage / totalPages) * 100;
   const remainingPages = totalPages - currentPage;
   const daysReading = startedAt ? differenceInDays(new Date(), new Date(startedAt)) + 1 : 1;
@@ -50,15 +55,21 @@ export function ReadingProgress({
   const estimatedDaysToFinish = pagesPerDay > 0 ? Math.ceil(remainingPages / pagesPerDay) : 0;
 
   const handleUpdateProgress = async () => {
-    if (newPage === currentPage) return;
+    // Validate page bounds
+    const validPage = Math.max(0, Math.min(newPage, totalPages));
+    if (validPage !== newPage) {
+      setNewPage(validPage);
+    }
+    
+    if (validPage === currentPage) return;
     
     setIsUpdating(true);
-    console.log(`Updating progress for ${title}: page ${newPage}`);
+    console.log(`Updating progress for ${title}: page ${validPage}`);
     
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 500));
     
-    onUpdateProgress?.(id, newPage);
+    onUpdateProgress?.(id, validPage);
     setIsUpdating(false);
   };
 
@@ -82,7 +93,9 @@ export function ReadingProgress({
       <CardContent>
         <Tabs defaultValue="progress" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="progress" data-testid={`tab-progress-${id}`}>Progress</TabsTrigger>
+            <TabsTrigger value="progress" data-testid={`tab-progress-${id}`}>
+              Progress
+            </TabsTrigger>
             <TabsTrigger value="history" data-testid={`tab-history-${id}`}>
               Sessions ({sessions.length})
             </TabsTrigger>
@@ -137,24 +150,32 @@ export function ReadingProgress({
               </div>
             )}
 
-            <div className="flex gap-2">
-              <Input
-                type="number"
-                value={newPage}
-                onChange={(e) => setNewPage(parseInt(e.target.value) || 0)}
-                min={0}
-                max={totalPages}
-                placeholder="Update page"
-                className="flex-1"
-                data-testid={`input-update-page-${id}`}
-              />
-              <Button 
-                onClick={handleUpdateProgress}
-                disabled={isUpdating || newPage === currentPage}
-                data-testid={`button-update-progress-${id}`}
-              >
-                {isUpdating ? "Updating..." : "Update"}
-              </Button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  value={newPage}
+                  onChange={(e) => setNewPage(parseInt(e.target.value) || 0)}
+                  min={0}
+                  max={totalPages}
+                  placeholder="Update page"
+                  className="flex-1"
+                  data-testid={`input-update-page-${id}`}
+                />
+                <Button 
+                  onClick={handleUpdateProgress}
+                  disabled={isUpdating || newPage === currentPage}
+                  data-testid={`button-update-progress-${id}`}
+                >
+                  {isUpdating ? "Updating..." : "Update"}
+                </Button>
+              </div>
+              {newPage > currentPage && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 p-2 rounded" data-testid={`sync-note-${id}`}>
+                  <Lightbulb className="h-3 w-3 text-blue-500" />
+                  <span>This will create a reading session: pages {currentPage}→{newPage}</span>
+                </div>
+              )}
             </div>
           </TabsContent>
           

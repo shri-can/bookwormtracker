@@ -62,9 +62,32 @@ export default function CurrentlyReading() {
   const [books, setBooks] = useState(mockCurrentlyReading);
 
   const handleUpdateProgress = (id: string, newPage: number) => {
-    setBooks(prev => prev.map(book => 
-      book.id === id ? { ...book, currentPage: newPage } : book
-    ));
+    setBooks(prev => prev.map(book => {
+      if (book.id === id) {
+        const oldPage = book.currentPage;
+        
+        // Create a reading session if progress moved forward
+        if (newPage > oldPage) {
+          const newSession = {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 5),
+            startPage: oldPage,
+            endPage: newPage,
+            sessionDate: new Date().toISOString(),
+            notes: `Progress updated: ${oldPage} → ${newPage} pages`,
+          };
+          
+          return {
+            ...book,
+            currentPage: newPage,
+            sessions: [...(book.sessions || []), newSession]
+          };
+        }
+        
+        // If progress moved backward or stayed the same, just update current page
+        return { ...book, currentPage: newPage };
+      }
+      return book;
+    }));
     console.log(`Updated progress for book ${id} to page ${newPage}`);
   };
 

@@ -63,6 +63,9 @@ export function ReadingSessionHistory({ bookId, sessions, onAddSession }: Readin
           <CardTitle className="flex items-center gap-2 text-lg">
             <History className="h-5 w-5" />
             Reading Sessions
+            <div className="text-xs font-normal text-muted-foreground bg-muted/50 px-2 py-1 rounded">
+              Synced with Progress
+            </div>
           </CardTitle>
           <Button 
             variant="outline" 
