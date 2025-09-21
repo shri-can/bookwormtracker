@@ -1,0 +1,206 @@
+Goals
+	•	Show what matters this week/month at a glance.
+	•	Answer “Am I on pace?” and “When will I finish?”
+	•	Nudge consistency (habits) without nagging.
+	•	Stay smooth offline.
+
+IA (one screen with 3 tabs)
+
+Top filter bar (sticky): Range (7d / 30d / 90d / YTD / Custom) • Unit (Pages / Time) • Format (All / Paper / eBook / Audio)
+
+Tab 1 — Overview (glanceable cards)
+	1.	Pace vs Goal
+	•	Big number: “184 pages (target: 210)” + tiny sparkline (pages/day).
+	•	Subtext: “Read 12 pages/day to hit goal by Sun.”
+	2.	Consistency (mini heatmap)
+	•	7×N calendar (mobile-friendly squares). Tooltip on tap shows pages/time.
+	•	Streak + Best streak.
+	3.	Time Spent
+	•	Total minutes in range + median session length.
+	4.	Books Finished
+	•	Count + chips of titles; tap → “Finished in X days, avg Y pph.”
+	5.	Active Book ETAs
+	•	For each reading book: progress bar + “ETA: Sep 29 (read ~10 pages/day)”.
+
+Tab 2 — Trends (visual)
+	•	Pages/day line (7/30/90d) with 7-day rolling average.
+	•	Session length histogram (bins: 5, 10, 15, 30, 45, 60+ min).
+	•	Time-of-day ring (24h radial band) or simple 4-slot bar (morning/afternoon/evening/night).
+	•	Weekday pattern (Mon–Sun bars) for when you actually read.
+
+Tab 3 — Breakdown (drilldowns)
+	•	By Book (top 5 in range): pages | sessions | time | pph | finish date (if finished).
+	•	By Author / Genre / Format / Source: top 3, “See all” opens list.
+	•	DNF insights: count in range, common reasons (from your DNF note), avg pages before DNF.
+	•	Recall (if enabled): due vs done, 7-day completion %, rolling retention.
+
+⸻
+
+What to compute (and how)
+
+Core aggregates (per day)
+	•	pages_read = SUM(MAX(0, endPage - startPage)) for sessions where both pages exist.
+	•	eBook/audio: if percent and pageCount exist → round((percentDelta)*pageCount); otherwise count time only.
+	•	minutes = SUM(durationSec)/60
+	•	sessions = COUNT(*)
+
+Pace
+	•	pph_book = SUM(pages_read)/SUM(hours) using last 5 sessions (book) or global fallback (last 20).
+	•	Trim outliers: drop top/bottom 5% by pph (winsorize) to avoid noisy spikes.
+
+ETA (per active book)
+	•	If pageCount and currentPage known:
+	•	remainingPages = pageCount - currentPage
+	•	etaDays = max(1, ceil(remainingPages / (pph_book * dailyAvailableHours)))
+	•	If no daily availability, derive a bite target: (remainingPages / daysToDeadline); show range when <3 sessions.
+
+Streak
+	•	A “read day” = pages ≥ 1 OR minutes ≥ 5.
+	•	Current streak = consecutive read days up to today.
+	•	Best streak = max consecutive in the selected range.
+
+Session histogram buckets
+	•	[0–5), [5–10), [10–15), [15–30), [30–45), [45–60), 60+ minutes.
+
+⸻
+
+Data model (add rollups so stats are fast)
+
+Add two small tables you update on write (or rebuild nightly):
+
+export const dailyTotals = pgTable('daily_totals', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  pages: integer('pages').notNull().default(0),
+  minutes: integer('minutes').notNull().default(0),
+  sessions: integer('sessions').notNull().default(0),
+});
+
+export const dailyBookTotals = pgTable('daily_book_totals', {
+  id: serial('id').primaryKey(),
+  date: date('date').notNull(),
+  bookId: uuid('book_id').references(() => books.id, { onDelete: 'cascade' }).notNull(),
+  pages: integer('pages').notNull().default(0),
+  minutes: integer('minutes').notNull().default(0),
+  sessions: integer('sessions').notNull().default(0),
+});
+
+On session stop/quick-add:
+	•	Upsert both totals for session.startAt.toDateString().
+
+This avoids heavy per-render aggregation on mobile.
+
+⸻
+
+API (keep it predictable)
+
+GET  /api/stats/overview?from=2025-09-01&to=2025-09-30
+     -> { totals:{pages,minutes,sessions},
+          goal:{targetPages,targetMinutes,biteTargetPerDay},
+          streak:{current,best},
+          finishedBooks:[{id,title,daysToFinish,avgPph}],
+          activeEtas:[{bookId,title,progressPct,etaDate,bitePages}],
+          sparkline:[{date,pages}],
+          heatmap:[{date,pages,minutes}] }
+
+GET  /api/stats/trends?from=&to=&unit=pages|time
+     -> { pagesPerDay:[{date,value}],
+          rollingAvg7:[{date,value}],
+          sessionHistogram:[{bin,label,count}],
+          timeOfDay:[{slot:'morning'|'afternoon'|'evening'|'night', minutes}],
+          weekday:[{dow:0..6, minutes,pages}] }
+
+GET  /api/stats/breakdown?from=&to=&group=book|author|genre|format|source
+     -> [{id,name,pages,minutes,sessions,pph,finishedAt?}]
+
+
+⸻
+
+Drizzle/SQL sketches (server)
+
+-- pages/time per day in range
+SELECT date, SUM(pages) AS pages, SUM(minutes) AS minutes, SUM(sessions) AS sessions
+FROM daily_totals
+WHERE date BETWEEN $1 AND $2
+GROUP BY date ORDER BY date;
+
+-- active ETAs
+SELECT b.id, b.title, b.page_count, b.current_page, b.progress_pct
+FROM books b
+WHERE b.status = 'reading';
+
+-- per-book pace (last 5 sessions each)
+SELECT s.book_id, SUM(GREATEST(0, s.pages_read)) / NULLIF(SUM(s.duration_sec)/3600.0,0) AS pph
+FROM reading_sessions s
+JOIN (
+  SELECT book_id, id
+  FROM (
+    SELECT id, book_id, ROW_NUMBER() OVER (PARTITION BY book_id ORDER BY start_at DESC) rn
+    FROM reading_sessions
+  ) x WHERE rn <= 5
+) last5 ON last5.id = s.id
+GROUP BY s.book_id;
+
+
+⸻
+
+UI components (shadcn + Recharts/visx)
+	•	<StatsPage/> with Tabs: Overview | Trends | Breakdown
+	•	<TopFilters/>: Range, Unit, Format (sticky)
+	•	Cards:
+	•	<PaceCard/> (number + sparkline)
+	•	<ConsistencyHeatmap/> (7×N grid; tap to show day detail)
+	•	<TimeSpentCard/>
+	•	<FinishedBooksCard/>
+	•	<ActiveEtasCard/>
+	•	Trends:
+	•	<LineChartSimple/>, <Histogram/>, <BarsMini/>
+	•	Breakdown:
+	•	<ListRow/> items with “Open book” CTA
+
+Mobile polish
+	•	44–48px tap targets; vertical scrolling only.
+	•	Charts: 1 per viewport (no side-by-side on small screens).
+	•	Keep gradients/text minimal; labels only where needed.
+
+⸻
+
+Microcopy (short, specific)
+	•	Pace card subtitle: “You’re 12% behind this week. Read 12 pages/day to catch up.”
+	•	Consistency: “Streak: 4 days (best 9).”
+	•	ETAs: “Deep Work — 62% — ETA Sep 29.”
+
+⸻
+
+Offline + performance
+	•	Cache /stats/* responses keyed by from/to/unit/format.
+	•	Precompute rollups on write; keep payloads <30 KB.
+	•	Use skeletons and tiny sparklines (no heavy legends).
+	•	All charts should render with ≤1 reflow (fixed container heights).
+
+⸻
+
+Edge cases & rules
+	•	Unknown pageCount → hide “pages-based” ETA; show time trend only.
+	•	Mixed modes (audio + paper): show totals in minutes by default; allow pages view that excludes unknowns.
+	•	Zero activity → show “It’s quiet here” + CTA to “Start a 10-page session now.”
+
+⸻
+
+Acceptance checklist
+	•	Changing Range/Unit/Format re-queries once and updates all cards together.
+	•	With 1,000 sessions over a year, Overview loads in <300 ms (server) and scrolls at 60 fps.
+	•	Streak and heatmap stay correct across midnight and timezone (IST) boundaries.
+	•	ETAs appear for all active books with known page counts and ≥3 sessions; otherwise show a conservative range or “Not enough data yet.”
+	•	Trends tab: panning/scrolling is smooth; interactions are single-tap.
+	•	Breakdown tap opens the book (or list) without losing filter state.
+
+⸻
+
+Implementation order (fastest to value)
+	1.	daily rollups + overview cards (pace, consistency, time, finished, ETAs).
+	2.	Trends (line + histogram).
+	3.	Breakdown lists.
+	4.	Heatmap polish + share/export (PNG/CSV of current range).
+
+Maybe stub the /api/stats/* endpoints and a minimal <ConsistencyHeatmap/> that works well on phones (7×N, fixed cell size, tap to reveal totals).

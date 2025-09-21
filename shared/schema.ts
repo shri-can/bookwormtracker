@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, real, serial, date, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -112,6 +112,24 @@ export const bookReadingState = pgTable("book_reading_state", {
   lastNudgeAt: timestamp("last_nudge_at"),
   nudgeDismissedAt: timestamp("nudge_dismissed_at"),
   reminderSettings: text("reminder_settings"), // JSON for time + bite preferences
+});
+
+// Daily reading statistics rollup tables for high-performance stats queries
+export const dailyTotals = pgTable("daily_totals", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  pages: integer("pages").notNull().default(0),
+  minutes: integer("minutes").notNull().default(0), 
+  sessions: integer("sessions").notNull().default(0),
+});
+
+export const dailyBookTotals = pgTable("daily_book_totals", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  bookId: varchar("book_id").notNull().references(() => books.id, { onDelete: "cascade" }),
+  pages: integer("pages").notNull().default(0),
+  minutes: integer("minutes").notNull().default(0),
+  sessions: integer("sessions").notNull().default(0),
 });
 
 // Define the fixed genre options
@@ -238,6 +256,15 @@ export const insertBookReadingStateSchema = createInsertSchema(bookReadingState)
 
 export const updateBookReadingStateSchema = insertBookReadingStateSchema.partial();
 
+// Daily totals schemas
+export const insertDailyTotalsSchema = createInsertSchema(dailyTotals).omit({
+  id: true,
+});
+
+export const insertDailyBookTotalsSchema = createInsertSchema(dailyBookTotals).omit({
+  id: true,
+});
+
 // Session action schemas for API endpoints
 export const startSessionSchema = z.object({
   bookId: z.string().uuid(),
@@ -277,6 +304,12 @@ export type UpdateBookNote = z.infer<typeof updateBookNoteSchema>;
 export type BookReadingState = typeof bookReadingState.$inferSelect;
 export type InsertBookReadingState = z.infer<typeof insertBookReadingStateSchema>;
 export type UpdateBookReadingState = z.infer<typeof updateBookReadingStateSchema>;
+
+export type DailyTotals = typeof dailyTotals.$inferSelect;
+export type InsertDailyTotals = z.infer<typeof insertDailyTotalsSchema>;
+
+export type DailyBookTotals = typeof dailyBookTotals.$inferSelect;
+export type InsertDailyBookTotals = z.infer<typeof insertDailyBookTotalsSchema>;
 
 // Action type exports
 export type StartSessionRequest = z.infer<typeof startSessionSchema>;

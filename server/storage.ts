@@ -11,6 +11,10 @@ import {
   type BookReadingState,
   type InsertBookReadingState,
   type UpdateBookReadingState,
+  type DailyTotals,
+  type InsertDailyTotals,
+  type DailyBookTotals,
+  type InsertDailyBookTotals,
   type StartSessionRequest,
   type PauseSessionRequest,
   type StopSessionRequest,
@@ -96,6 +100,12 @@ export interface IStorage {
     totalPages: number;
     booksRead: string[];
   }>;
+
+  // Daily totals operations for high-performance stats
+  upsertDailyTotals(date: string, pages: number, minutes: number, sessions: number): Promise<DailyTotals>;
+  upsertDailyBookTotals(date: string, bookId: string, pages: number, minutes: number, sessions: number): Promise<DailyBookTotals>;
+  getDailyTotalsInRange(startDate: string, endDate: string): Promise<DailyTotals[]>;
+  getDailyBookTotalsInRange(startDate: string, endDate: string, bookId?: string): Promise<DailyBookTotals[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -103,12 +113,16 @@ export class MemStorage implements IStorage {
   private sessions: Map<string, ReadingSession>;
   private notes: Map<string, BookNote>;
   private readingStates: Map<string, BookReadingState>;
+  private dailyTotals: Map<string, DailyTotals>;
+  private dailyBookTotals: Map<string, DailyBookTotals>;
 
   constructor() {
     this.books = new Map();
     this.sessions = new Map();
     this.notes = new Map();
     this.readingStates = new Map();
+    this.dailyTotals = new Map();
+    this.dailyBookTotals = new Map();
   }
 
   async getBook(id: string): Promise<Book | undefined> {
@@ -785,6 +799,81 @@ export class MemStorage implements IStorage {
       totalPages,
       booksRead,
     };
+  }
+
+  // Daily totals operations for high-performance stats
+  async upsertDailyTotals(date: string, pages: number, minutes: number, sessions: number): Promise<DailyTotals> {
+    const existing = this.dailyTotals.get(date);
+    
+    if (existing) {
+      // Update existing totals
+      const updated: DailyTotals = {
+        ...existing,
+        pages: existing.pages + pages,
+        minutes: existing.minutes + minutes,
+        sessions: existing.sessions + sessions,
+      };
+      this.dailyTotals.set(date, updated);
+      return updated;
+    } else {
+      // Create new daily total
+      const newTotal: DailyTotals = {
+        id: this.dailyTotals.size + 1, // Simple increment for memory storage
+        date,
+        pages,
+        minutes,
+        sessions,
+      };
+      this.dailyTotals.set(date, newTotal);
+      return newTotal;
+    }
+  }
+
+  async upsertDailyBookTotals(date: string, bookId: string, pages: number, minutes: number, sessions: number): Promise<DailyBookTotals> {
+    const key = `${date}:${bookId}`;
+    const existing = this.dailyBookTotals.get(key);
+    
+    if (existing) {
+      // Update existing book totals
+      const updated: DailyBookTotals = {
+        ...existing,
+        pages: existing.pages + pages,
+        minutes: existing.minutes + minutes,
+        sessions: existing.sessions + sessions,
+      };
+      this.dailyBookTotals.set(key, updated);
+      return updated;
+    } else {
+      // Create new daily book total
+      const newTotal: DailyBookTotals = {
+        id: this.dailyBookTotals.size + 1, // Simple increment for memory storage
+        date,
+        bookId,
+        pages,
+        minutes,
+        sessions,
+      };
+      this.dailyBookTotals.set(key, newTotal);
+      return newTotal;
+    }
+  }
+
+  async getDailyTotalsInRange(startDate: string, endDate: string): Promise<DailyTotals[]> {
+    return Array.from(this.dailyTotals.values()).filter(total => 
+      total.date >= startDate && total.date <= endDate
+    ).sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  async getDailyBookTotalsInRange(startDate: string, endDate: string, bookId?: string): Promise<DailyBookTotals[]> {
+    let totals = Array.from(this.dailyBookTotals.values()).filter(total => 
+      total.date >= startDate && total.date <= endDate
+    );
+    
+    if (bookId) {
+      totals = totals.filter(total => total.bookId === bookId);
+    }
+    
+    return totals.sort((a, b) => a.date.localeCompare(b.date));
   }
 }
 
