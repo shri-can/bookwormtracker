@@ -456,6 +456,7 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
                     <Textarea 
                       placeholder="e.g., Learning design principles, improving leadership skills..."
                       {...field} 
+                      value={field.value || ""}
                       data-testid="textarea-book-usefulness"
                     />
                   </FormControl>
@@ -518,7 +519,7 @@ export function AddBookDialog({ onAddBook, trigger }: AddBookDialogProps) {
                   </div>
                   <FormControl>
                     <Switch
-                      checked={field.value}
+                      checked={field.value || false}
                       onCheckedChange={field.onChange}
                       data-testid="switch-currently-reading"
                     />

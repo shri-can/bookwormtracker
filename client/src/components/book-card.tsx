@@ -105,7 +105,7 @@ export function BookCard({
   const StatusIcon = statusConfig?.icon || Bookmark;
   
   // Calculate reading progress
-  const readingProgress = progress * 100;
+  const readingProgress = (progress || 0) * 100;
   const pageProgress = totalPages && currentPage 
     ? (currentPage / totalPages) * 100 
     : readingProgress;
