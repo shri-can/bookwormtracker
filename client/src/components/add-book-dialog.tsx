@@ -118,9 +118,10 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
     form.setValue("title", bookData.title);
     form.setValue("author", bookData.authors.join(", "));
     
-    // Use intelligent genre mapping
+    // Use intelligent genre mapping with safety guard
     const suggestedGenre = bookSearchService.getCanonicalGenre(bookData.subjects);
-    form.setValue("genre", suggestedGenre as any);
+    const safeGenre = BOOK_GENRES.includes(suggestedGenre as any) ? suggestedGenre : "General Non-Fiction";
+    form.setValue("genre", safeGenre as any);
     
     // Extract topics using intelligent extraction
     const suggestedTopics = bookSearchService.extractTopics(bookData.subjects, bookData.description);
@@ -217,7 +218,7 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
       <DialogTrigger asChild>
         {trigger || defaultTrigger}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]" data-testid="dialog-add-book">
+      <DialogContent className="sm:max-w-[425px] max-h-[80vh] overflow-y-auto" data-testid="dialog-add-book">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             Add New Book
@@ -275,7 +276,7 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Genre</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-book-genre">
                         <SelectValue placeholder="Select a genre" />
@@ -386,7 +387,7 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-book-status">
                           <SelectValue placeholder="Select status" />
@@ -438,7 +439,7 @@ export function AddBookDialog({ onAddBook, trigger, open, onOpenChange }: AddBoo
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Format</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-book-format">
                           <SelectValue placeholder="Select format" />
