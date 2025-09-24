@@ -82,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lowerCategory = category.toLowerCase();
         if (lowerCategory.includes('fiction') && !lowerCategory.includes('non-fiction')) return "Fiction";
         if (lowerCategory.includes('business') || lowerCategory.includes('finance') || lowerCategory.includes('economics')) return "Business / Finance";
-        if (lowerCategory.includes('self-help') || lowerCategory.includes('personal development') || lowerCategory.includes('self help')) return "Self-Help / Personal Development";
+        if (lowerCategory.includes('self-help') || lowerCategory.includes('personal development') || lowerCategory.includes('self help')) return "Personal Development";
         if (lowerCategory.includes('philosophy') || lowerCategory.includes('spirituality') || lowerCategory.includes('religion')) return "Philosophy / Spirituality";
         if (lowerCategory.includes('psychology') || lowerCategory.includes('self-improvement') || lowerCategory.includes('personal growth')) return "Psychology / Self-Improvement";
         if (lowerCategory.includes('history') || lowerCategory.includes('culture') || lowerCategory.includes('historical')) return "History / Culture";
@@ -1006,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const lowerCategory = category.toLowerCase();
         if (lowerCategory.includes('fiction') || lowerCategory.includes('novel')) return 'Fiction';
         if (lowerCategory.includes('business') || lowerCategory.includes('finance')) return 'Business / Finance';
-        if (lowerCategory.includes('self-help') || lowerCategory.includes('personal development')) return 'Self-Help / Personal Development';
+        if (lowerCategory.includes('self-help') || lowerCategory.includes('personal development')) return 'Personal Development';
         if (lowerCategory.includes('philosophy') || lowerCategory.includes('spirituality')) return 'Philosophy / Spirituality';
         if (lowerCategory.includes('psychology')) return 'Psychology / Self-Improvement';
         if (lowerCategory.includes('history') || lowerCategory.includes('culture')) return 'History / Culture';
@@ -1023,7 +1023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const bookData = {
         title: searchResult.title,
         author: Array.isArray(searchResult.authors) ? searchResult.authors.join(', ') : searchResult.author || 'Unknown Author',
-        genre: genre as "Fiction" | "Self-Help / Personal Development" | "Business / Finance" | "Philosophy / Spirituality" | "Psychology / Self-Improvement" | "History / Culture" | "Science / Technology" | "General Non-Fiction" | "Biography/Memoir",
+        genre: genre as "Fiction" | "Personal Development" | "Business / Finance" | "Philosophy / Spirituality" | "Psychology / Self-Improvement" | "History / Culture" | "Science / Technology" | "General Non-Fiction" | "Biography/Memoir",
         status: 'toRead' as const,
         priority: 3, // medium priority
         format: 'paper' as const,

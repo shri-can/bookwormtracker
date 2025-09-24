@@ -213,7 +213,16 @@ export function BookCard({
                 
                 {/* Priority indicator */}
                 {priority && priority !== 3 && (
-                  <Badge variant="outline" className="text-xs">
+                  <Badge 
+                    variant="outline" 
+                    className={`text-xs font-semibold ${
+                      priority === 1 ? "bg-red-100 text-red-800 border-red-200" :
+                      priority === 2 ? "bg-orange-100 text-orange-800 border-orange-200" :
+                      priority === 4 ? "bg-blue-100 text-blue-800 border-blue-200" :
+                      priority === 5 ? "bg-green-100 text-green-800 border-green-200" :
+                      "bg-gray-100 text-gray-800 border-gray-200"
+                    }`}
+                  >
                     P{priority}
                   </Badge>
                 )}
@@ -357,7 +366,16 @@ export function BookCard({
           </Badge>
           
           {priority && priority !== 3 && (
-            <Badge variant="outline" className="text-xs">
+            <Badge 
+              variant="outline" 
+              className={`text-xs font-semibold ${
+                priority === 1 ? "bg-red-100 text-red-800 border-red-200" :
+                priority === 2 ? "bg-orange-100 text-orange-800 border-orange-200" :
+                priority === 4 ? "bg-blue-100 text-blue-800 border-blue-200" :
+                priority === 5 ? "bg-green-100 text-green-800 border-green-200" :
+                "bg-gray-100 text-gray-800 border-gray-200"
+              }`}
+            >
               Priority {priority}
             </Badge>
           )}

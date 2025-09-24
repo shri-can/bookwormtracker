@@ -1,15 +1,9 @@
 import { useState } from 'react';
-import { ChevronDown, BookOpen, Plus } from 'lucide-react';
+import { BookOpen, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { getProgressPercentage } from '@/lib/progressUtils';
 import type { Book } from '@shared/schema';
 
@@ -44,82 +38,102 @@ export function BookSwitcher({ selectedBook, onBookSelect, onAddNewBook, current
 
   return (
     <div className="flex flex-col space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Currently Reading</h2>
+      {/* Book Count Badge */}
+      <div className="flex justify-end">
         <Badge variant="outline" data-testid="badge-books-count">
           {currentlyReadingBooks.length} book{currentlyReadingBooks.length === 1 ? '' : 's'}
         </Badge>
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button 
-            variant="outline" 
-            className="w-full justify-between h-auto p-4"
-            data-testid="button-book-switcher"
-          >
-            {selectedBook ? (
-              <div className="flex flex-col items-start space-y-1">
-                <div className="font-medium">{selectedBook.title}</div>
-                <div className="text-sm text-muted-foreground">
-                  by {selectedBook.author} • {getProgressPercentage(selectedBook)}% complete
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2">
-                <BookOpen className="h-4 w-4" />
-                <span>Select a book to read</span>
-              </div>
-            )}
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
-        
-        <DropdownMenuContent className="w-80" align="start">
-          {currentlyReadingBooks.map((book) => (
-            <DropdownMenuItem
-              key={book.id}
-              onClick={() => onBookSelect(book)}
-              className="p-3 h-auto"
-              data-testid={`menu-item-book-${book.id}`}
-            >
-              <div className="flex flex-col space-y-1 w-full">
-                <div className="flex items-center justify-between">
-                  <span className="font-medium truncate">{book.title}</span>
-                  {selectedBook?.id === book.id && (
-                    <Badge variant="default" className="ml-2">Current</Badge>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  by {book.author}
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{book.genre}</span>
-                  <span>{getProgressPercentage(book)}% complete</span>
-                </div>
-                {book.currentPage && book.totalPages && (
-                  <div className="w-full bg-muted rounded-full h-1.5 mt-1">
-                    <div 
-                      className="bg-accent h-1.5 rounded-full transition-all" 
-                      style={{ width: `${getProgressPercentage(book)}%` }}
-                    />
+      {/* Horizontal Book Chips */}
+      <ScrollArea className="w-full">
+        <div className="flex space-x-2 pb-1">
+          {currentlyReadingBooks.map((book) => {
+            const isSelected = selectedBook?.id === book.id;
+            const progress = getProgressPercentage(book);
+            
+            return (
+              <Card
+                key={book.id}
+                className={`cursor-pointer transition-all hover:shadow-sm min-w-[120px] ${
+                  isSelected 
+                    ? 'ring-2 ring-primary bg-primary/5' 
+                    : 'hover:bg-muted/50'
+                }`}
+                onClick={() => onBookSelect(book)}
+                data-testid={`chip-book-${book.id}`}
+              >
+                <CardContent className="p-2">
+                  <div className="flex items-center space-x-2">
+                    {/* Book Cover Placeholder */}
+                    <div className="w-8 h-10 bg-muted rounded flex items-center justify-center flex-shrink-0">
+                      {book.coverUrl ? (
+                        <img 
+                          src={book.coverUrl} 
+                          alt={book.title}
+                          className="w-full h-full object-cover rounded"
+                        />
+                      ) : (
+                        <BookOpen className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                    
+                    {/* Book Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-medium text-xs truncate">{book.title}</h3>
+                        {isSelected && (
+                          <Check className="h-3 w-3 text-primary flex-shrink-0 ml-1" />
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {book.author}
+                      </p>
+                      
+                      {/* Progress Bar */}
+                      <div className="mt-1">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-muted-foreground">{progress}%</span>
+                          <span className="font-medium">{book.currentPage || 0}/{book.totalPages || '?'}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-1">
+                          <div 
+                            className="bg-primary h-1 rounded-full transition-all" 
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        {book.currentPage && book.totalPages && (
+                          <div className="text-xs text-muted-foreground">
+                            {book.currentPage} of {book.totalPages} pages
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-            </DropdownMenuItem>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
           
+          {/* Add New Book Chip */}
           {onAddNewBook && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={onAddNewBook} data-testid="menu-item-add-book">
-                <Plus className="h-4 w-4 mr-2" />
-                Add New Book
-              </DropdownMenuItem>
-            </>
+            <Card
+              className="cursor-pointer transition-all hover:shadow-sm min-w-[120px] border-dashed hover:bg-muted/50"
+              onClick={onAddNewBook}
+              data-testid="chip-add-book"
+            >
+              <CardContent className="p-2 flex items-center justify-center h-full">
+                <div className="text-center">
+                  <div className="w-8 h-10 bg-muted rounded flex items-center justify-center mx-auto mb-1">
+                    <Plus className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <div className="text-xs font-medium">Add Book</div>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </DropdownMenuContent>
-      </DropdownMenu>
+        </div>
+      </ScrollArea>
     </div>
   );
 }

@@ -935,4 +935,6 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+import { FileStorage } from './storage/FileStorage';
+
+export const storage = process.env.LOCAL_PERSIST === '1' ? new FileStorage() : new MemStorage();

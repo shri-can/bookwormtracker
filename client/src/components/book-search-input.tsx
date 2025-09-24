@@ -111,7 +111,7 @@ export function BookSearchInput({
   };
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       <div className="relative">
         <Input
           ref={inputRef}
@@ -120,7 +120,7 @@ export function BookSearchInput({
           placeholder={placeholder}
           disabled={disabled || isLoadingDetails}
           data-testid={testId}
-          className="pr-10"
+          className="pr-10 h-8"
         />
         {(isLoading || isLoadingDetails) && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -139,6 +139,11 @@ export function BookSearchInput({
             <div className="p-3 text-sm text-destructive" data-testid={`${testId}-error`}>
               {error}
             </div>
+          ) : isLoading ? (
+            <div className="p-4 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Searching for books...</p>
+            </div>
           ) : suggestions.length > 0 ? (
             <ScrollArea className="max-h-80">
               <div className="p-1">
@@ -153,7 +158,16 @@ export function BookSearchInput({
                     <div className="flex items-start gap-3 w-full">
                       {/* Book Cover or Icon */}
                       <div className="flex-shrink-0">
-                        {suggestion.cover_i ? (
+                        {suggestion.thumbnail ? (
+                          <img
+                            src={suggestion.thumbnail}
+                            alt={suggestion.title}
+                            className="w-12 h-16 object-cover rounded"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        ) : suggestion.cover_i ? (
                           <img
                             src={bookSearchService.getCoverUrl(suggestion.cover_i, 'S') || ''}
                             alt={suggestion.title}
@@ -195,12 +209,18 @@ export function BookSearchInput({
                               <span>{suggestion.number_of_pages_median} pages</span>
                             </div>
                           )}
+                          {suggestion.averageRating && suggestion.averageRating > 0 && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-yellow-500">★</span>
+                              <span>{suggestion.averageRating.toFixed(1)}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Subjects/Genre Preview */}
-                        {suggestion.subject && suggestion.subject.length > 0 && (
+                        {(suggestion.subject && suggestion.subject.length > 0) || (suggestion.categories && suggestion.categories.length > 0) ? (
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {suggestion.subject.slice(0, 2).map((subject, i) => (
+                            {(suggestion.categories || suggestion.subject || []).slice(0, 2).map((subject, i) => (
                               <Badge 
                                 key={i} 
                                 variant="secondary" 
@@ -209,20 +229,20 @@ export function BookSearchInput({
                                 {subject.length > 15 ? subject.substring(0, 15) + '...' : subject}
                               </Badge>
                             ))}
-                            {suggestion.subject.length > 2 && (
+                            {(suggestion.categories || suggestion.subject || []).length > 2 && (
                               <Badge variant="outline" className="text-xs px-1 py-0">
-                                +{suggestion.subject.length - 2}
+                                +{(suggestion.categories || suggestion.subject || []).length - 2}
                               </Badge>
                             )}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   </Button>
                 ))}
               </div>
             </ScrollArea>
-          ) : !isLoading && (
+          ) : (
             <div className="p-3 text-sm text-muted-foreground text-center" data-testid={`${testId}-no-results`}>
               No books found. Try a different search term.
             </div>

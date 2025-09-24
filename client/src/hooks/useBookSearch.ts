@@ -9,7 +9,7 @@ interface UseBookSearchResult {
   clearSuggestions: () => void;
 }
 
-export function useBookSearch(debounceMs = 300): UseBookSearchResult {
+export function useBookSearch(debounceMs = 150): UseBookSearchResult {
   const [suggestions, setSuggestions] = useState<BookSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

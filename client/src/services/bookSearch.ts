@@ -9,6 +9,14 @@ export interface BookSuggestion {
   cover_i?: number;
   edition_key?: string[];
   cover_edition_key?: string;
+  // Google Books specific fields
+  googleId?: string;
+  thumbnail?: string;
+  description?: string;
+  publisher?: string;
+  averageRating?: number;
+  ratingsCount?: number;
+  categories?: string[];
 }
 
 export interface BookDetails {
@@ -25,12 +33,22 @@ export interface BookDetails {
 const OPEN_LIBRARY_BASE = 'https://openlibrary.org';
 const SEARCH_API = `${OPEN_LIBRARY_BASE}/search.json`;
 const BOOKS_API = `${OPEN_LIBRARY_BASE}/api/books`;
+const GOOGLE_BOOKS_API = 'https://www.googleapis.com/books/v1/volumes';
 
 export class BookSearchService {
   private controller: AbortController | null = null;
+  private searchCache = new Map<string, { results: BookSuggestion[], timestamp: number }>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
   async searchBooks(query: string, limit = 10): Promise<BookSuggestion[]> {
     if (!query.trim()) return [];
+
+    // Check cache first
+    const cacheKey = `${query.toLowerCase()}-${limit}`;
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.results;
+    }
 
     // Cancel previous request if it exists
     if (this.controller) {
@@ -40,30 +58,104 @@ export class BookSearchService {
     this.controller = new AbortController();
 
     try {
-      const response = await fetch(
-        `${SEARCH_API}?q=${encodeURIComponent(query)}&limit=${limit}&fields=key,title,author_name,first_publish_year,isbn,number_of_pages_median,subject,cover_i,edition_key,cover_edition_key`,
-        {
-          signal: this.controller.signal,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Search failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-      return data.docs || [];
+      // Try Google Books API first (faster and better results)
+      const results = await this.searchGoogleBooks(query, limit);
+      
+      // Cache the results
+      this.searchCache.set(cacheKey, {
+        results,
+        timestamp: Date.now()
+      });
+      
+      return results;
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         return []; // Request was cancelled, return empty results
       }
       console.error('Book search error:', error);
-      throw error;
+      
+      // Fallback to Open Library if Google Books fails
+      try {
+        const fallbackResults = await this.searchOpenLibrary(query, limit);
+        this.searchCache.set(cacheKey, {
+          results: fallbackResults,
+          timestamp: Date.now()
+        });
+        return fallbackResults;
+      } catch (fallbackError) {
+        console.error('Fallback search also failed:', fallbackError);
+        throw error; // Throw original error
+      }
     }
+  }
+
+  private async searchGoogleBooks(query: string, limit: number): Promise<BookSuggestion[]> {
+    const searchUrl = `${GOOGLE_BOOKS_API}?q=${encodeURIComponent(query)}&maxResults=${limit}&orderBy=relevance&printType=books`;
+    
+    const response = await fetch(searchUrl, {
+      signal: this.controller?.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google Books API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const books = data.items || [];
+
+    return books.map((item: any, index: number) => {
+      const volumeInfo = item.volumeInfo || {};
+      const imageLinks = volumeInfo.imageLinks || {};
+      
+      return {
+        key: `google-${item.id}-${index}`,
+        googleId: item.id,
+        title: volumeInfo.title || 'Unknown Title',
+        author_name: volumeInfo.authors || ['Unknown Author'],
+        first_publish_year: volumeInfo.publishedDate ? parseInt(volumeInfo.publishedDate.split('-')[0]) : undefined,
+        isbn: volumeInfo.industryIdentifiers?.map((id: any) => id.identifier) || [],
+        number_of_pages_median: volumeInfo.pageCount || undefined,
+        subject: volumeInfo.categories || [],
+        thumbnail: imageLinks.thumbnail || imageLinks.smallThumbnail || '',
+        description: volumeInfo.description || '',
+        publisher: volumeInfo.publisher || '',
+        averageRating: volumeInfo.averageRating || 0,
+        ratingsCount: volumeInfo.ratingsCount || 0,
+        categories: volumeInfo.categories || [],
+        cover_i: this.extractCoverId(imageLinks.thumbnail),
+      };
+    });
+  }
+
+  private async searchOpenLibrary(query: string, limit: number): Promise<BookSuggestion[]> {
+    const response = await fetch(
+      `${SEARCH_API}?q=${encodeURIComponent(query)}&limit=${limit}&fields=key,title,author_name,first_publish_year,isbn,number_of_pages_median,subject,cover_i,edition_key,cover_edition_key`,
+      {
+        signal: this.controller?.signal,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Open Library search failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.docs || [];
+  }
+
+  private extractCoverId(thumbnailUrl?: string): number | undefined {
+    if (!thumbnailUrl) return undefined;
+    const match = thumbnailUrl.match(/\/b\/id\/(\d+)-/);
+    return match ? parseInt(match[1]) : undefined;
   }
 
   async getBookDetails(suggestion: BookSuggestion): Promise<BookDetails | null> {
     try {
+      // If we have Google Books data, use it directly
+      if (suggestion.googleId) {
+        return this.createGoogleBooksDetails(suggestion);
+      }
+
       // Try to find a proper edition key for the Books API
       let bibkey = '';
       
@@ -120,6 +212,19 @@ export class BookSearchService {
     }
   }
 
+  private createGoogleBooksDetails(suggestion: BookSuggestion): BookDetails {
+    return {
+      title: suggestion.title,
+      authors: suggestion.author_name || [],
+      publishYear: suggestion.first_publish_year,
+      pageCount: suggestion.number_of_pages_median,
+      subjects: suggestion.subject || suggestion.categories || [],
+      description: suggestion.description,
+      coverUrl: suggestion.thumbnail,
+      isbn: suggestion.isbn?.[0],
+    };
+  }
+
   private createFallbackDetails(suggestion: BookSuggestion): BookDetails {
     return {
       title: suggestion.title,
@@ -155,15 +260,15 @@ export class BookSearchService {
       'drama': 'Fiction',
       'literary fiction': 'Fiction',
       
-      // Self-Help / Personal Development
-      'self help': 'Self-Help / Personal Development',
-      'self-help': 'Self-Help / Personal Development',
-      'personal development': 'Self-Help / Personal Development',
-      'self improvement': 'Self-Help / Personal Development',
-      'self-improvement': 'Self-Help / Personal Development',
-      'motivation': 'Self-Help / Personal Development',
-      'productivity': 'Self-Help / Personal Development',
-      'habits': 'Self-Help / Personal Development',
+      // Personal Development
+      'self help': 'Personal Development',
+      'self-help': 'Personal Development',
+      'personal development': 'Personal Development',
+      'self improvement': 'Personal Development',
+      'self-improvement': 'Personal Development',
+      'motivation': 'Personal Development',
+      'productivity': 'Personal Development',
+      'habits': 'Personal Development',
       
       // Business / Finance
       'business': 'Business / Finance',
@@ -375,6 +480,18 @@ export class BookSearchService {
       this.controller.abort();
       this.controller = null;
     }
+  }
+
+  clearCache() {
+    this.searchCache.clear();
+  }
+
+  // Get cache statistics for debugging
+  getCacheStats() {
+    return {
+      size: this.searchCache.size,
+      keys: Array.from(this.searchCache.keys()),
+    };
   }
 }
 

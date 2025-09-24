@@ -16,6 +16,8 @@ export interface SessionActions {
   resumeSession: (sessionId: string) => Promise<ReadingSession>;
   stopSession: (request: StopSessionRequest) => Promise<ReadingSession>;
   quickAddPages: (request: QuickAddPagesRequest) => Promise<ReadingSession>;
+  getLastEndPage: (bookId: string) => Promise<number | null>;
+  calculateEndPage: (startPage: number, pagesRead: number) => number;
 }
 
 export interface UseSessionStateReturn {
@@ -231,6 +233,25 @@ export function useSessionState(bookId: string): UseSessionStateReturn {
     },
   });
 
+  // Get last end page for auto-fill
+  const getLastEndPage = async (bookId: string): Promise<number | null> => {
+    try {
+      const response = await fetch(`/api/books/${bookId}/sessions?limit=1`);
+      if (!response.ok) return null;
+      
+      const data = await response.json();
+      const lastSession = data[0];
+      return lastSession?.endPage || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Calculate end page from start page and pages read
+  const calculateEndPage = (startPage: number, pagesRead: number): number => {
+    return startPage + pagesRead;
+  };
+
   const actions: SessionActions = {
     startSession: startSessionMutation.mutateAsync,
     pauseSession: (sessionId: string, reason?: string) => 
@@ -238,6 +259,8 @@ export function useSessionState(bookId: string): UseSessionStateReturn {
     resumeSession: resumeSessionMutation.mutateAsync,
     stopSession: stopSessionMutation.mutateAsync,
     quickAddPages: quickAddMutation.mutateAsync,
+    getLastEndPage,
+    calculateEndPage,
   };
 
   const isLoadingAny = 

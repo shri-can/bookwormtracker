@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { BookSwitcher } from '@/components/book-switcher';
-import { HeroSessionCard } from '@/components/hero-session-card';
+import { useBookSessions } from '@/hooks/useBookSessions';
+import { BookSwitcher } from '@/components/book-switcher-intelligent';
+import { HeroSessionCard } from '@/components/hero-session-card-clean';
 import { AddBookDialog } from '@/components/add-book-dialog';
+import { SessionsSummary } from '@/components/sessions-summary';
+import { BookNotesQuotes } from '@/components/book-notes-quotes';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BookOpen, Plus } from 'lucide-react';
 import type { Book, ReadingSession } from '@shared/schema';
 
@@ -30,13 +34,18 @@ export default function CurrentlyReading() {
     },
   });
 
+  // Get the current selected book from the latest cache data
+  const currentSelectedBook = selectedBook && currentlyReadingBooks.length > 0 
+    ? currentlyReadingBooks.find(book => book.id === selectedBook.id) || currentlyReadingBooks[0]
+    : currentlyReadingBooks[0] || null;
+
   // Query for active session of selected book (moved here to fix hooks rule violation)
   const { data: activeSession, refetch: refetchActiveSession } = useQuery({
-    queryKey: ['/api/books', selectedBook?.id, 'active-session'],
+    queryKey: ['/api/books', currentSelectedBook?.id, 'active-session'],
     queryFn: async () => {
-      if (!selectedBook) return null;
+      if (!currentSelectedBook) return null;
       
-      const response = await fetch(`/api/books/${selectedBook.id}/active-session`);
+      const response = await fetch(`/api/books/${currentSelectedBook.id}/active-session`);
       if (!response.ok) {
         if (response.status === 404) return null;
         throw new Error('Failed to fetch active session');
@@ -52,7 +61,12 @@ export default function CurrentlyReading() {
         endedAt: data.endedAt ? new Date(data.endedAt) : null,
       } as ReadingSession : null;
     },
-    enabled: !!selectedBook,
+    enabled: !!currentSelectedBook,
+  });
+
+  // Query for book sessions
+  const { data: bookSessions = [] } = useBookSessions(currentSelectedBook?.id || '', {
+    state: 'completed', // Only get completed sessions for the summary
   });
 
   // Auto-select the first book if none is selected
@@ -61,6 +75,7 @@ export default function CurrentlyReading() {
       setSelectedBook(currentlyReadingBooks[0]);
     }
   }, [currentlyReadingBooks, selectedBook]);
+
 
   // Show loading state
   if (isLoadingBooks) {
@@ -112,6 +127,7 @@ export default function CurrentlyReading() {
   };
 
   const handleSessionUpdate = () => {
+    // Simply invalidate queries to refresh data
     refetchActiveSession();
   };
 
@@ -154,30 +170,56 @@ export default function CurrentlyReading() {
   }
 
   return (
-    <div className="space-y-6" data-testid="page-currently-reading">
-      <div>
-        <h1 className="text-3xl font-serif font-semibold">Currently Reading</h1>
-        <p className="text-muted-foreground mt-1">
+    <div className="space-y-4" data-testid="page-currently-reading">
+      {/* Compact Header */}
+      <div className="pt-2">
+        <h1 className="text-2xl md:text-3xl font-serif font-semibold">Currently Reading</h1>
+        <p className="text-muted-foreground mt-1 hidden md:block">
           Track your reading sessions with advanced timer and progress forecasting
         </p>
       </div>
 
-      {/* Book Switcher */}
-      <BookSwitcher
-        selectedBook={selectedBook}
-        onBookSelect={handleBookSelect}
-        onAddNewBook={handleAddNewBook}
-        currentlyReadingBooks={currentlyReadingBooks}
-      />
+      {/* Sticky Book Switcher */}
+      <div className="sticky top-4 z-10 bg-background/95 backdrop-blur-sm border-b pb-4">
+        <BookSwitcher
+          books={currentlyReadingBooks}
+          activeId={selectedBook?.id}
+          onSwitch={handleBookSelect}
+          onAdd={handleAddNewBook}
+        />
+      </div>
 
-      {/* Hero Session Card */}
-      {selectedBook && (
-        <div className="max-w-2xl mx-auto">
-          <HeroSessionCard
-            book={selectedBook}
-            activeSession={activeSession}
-            onSessionUpdate={handleSessionUpdate}
-          />
+      {/* Main Content with Tabs */}
+      {currentSelectedBook && (
+        <div className="max-w-4xl mx-auto">
+          <Tabs defaultValue="session" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="session">Reading Session</TabsTrigger>
+              <TabsTrigger value="summary">Session History</TabsTrigger>
+              <TabsTrigger value="notes">Notes & Quotes</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="session" className="mt-6">
+              <HeroSessionCard
+                book={currentSelectedBook}
+                activeSession={activeSession}
+                onSessionUpdate={handleSessionUpdate}
+              />
+            </TabsContent>
+            
+            <TabsContent value="summary" className="mt-6">
+              <SessionsSummary 
+                book={currentSelectedBook} 
+                sessions={bookSessions} 
+              />
+            </TabsContent>
+            
+            <TabsContent value="notes" className="mt-6">
+              <BookNotesQuotes 
+                book={currentSelectedBook} 
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       )}
 
@@ -187,7 +229,7 @@ export default function CurrentlyReading() {
             <BookOpen className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">Select a book to start reading</h3>
             <p className="text-muted-foreground">
-              Choose a book from the dropdown above to begin your reading session
+              Choose a book from the switcher above to begin your reading session
             </p>
           </CardContent>
         </Card>

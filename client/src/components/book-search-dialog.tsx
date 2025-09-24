@@ -42,11 +42,11 @@ export function BookSearchDialog({ children }: BookSearchDialogProps) {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const { toast } = useToast();
 
-  // Debounce search query
+  // Debounce search query - faster for better UX
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(searchQuery);
-    }, 500);
+    }, 200);
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
@@ -54,7 +54,7 @@ export function BookSearchDialog({ children }: BookSearchDialogProps) {
   const { data: searchResults, isLoading: isSearching } = useQuery<SearchResponse>({
     queryKey: ['/api/books/search', debouncedQuery],
     queryFn: async () => {
-      if (!debouncedQuery || debouncedQuery.trim().length < 2) {
+      if (!debouncedQuery || debouncedQuery.trim().length < 1) {
         return { books: [], total: 0 };
       }
       
@@ -65,7 +65,7 @@ export function BookSearchDialog({ children }: BookSearchDialogProps) {
       }
       return response.json();
     },
-    enabled: debouncedQuery.trim().length >= 2,
+    enabled: debouncedQuery.trim().length >= 1,
   });
 
   const addBookMutation = useMutation({
@@ -165,7 +165,7 @@ export function BookSearchDialog({ children }: BookSearchDialogProps) {
                 </div>
               )}
 
-              {!isSearching && debouncedQuery.trim().length < 2 && (
+              {!isSearching && debouncedQuery.trim().length < 1 && (
                 <div className="text-center py-8 text-muted-foreground" data-testid="text-search-prompt">
                   <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p>Start typing to search for books</p>

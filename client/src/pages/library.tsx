@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { BookCard } from "@/components/book-card";
 import { AddBookDialog } from "@/components/add-book-dialog";
-import { BulkUploadDialog } from "@/components/bulk-upload-dialog";
 import { BookSearchDialog } from "@/components/book-search-dialog";
 import { ExportDialog } from "@/components/export-dialog";
 import { ImportDialog } from "@/components/import-dialog";
@@ -77,6 +76,7 @@ export default function Library() {
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedBooks, setSelectedBooks] = useState<Set<string>>(new Set());
   const [searchInputRef, setSearchInputRef] = useState<HTMLInputElement | null>(null);
+  const [isAddBookOpen, setIsAddBookOpen] = useState(false);
   
   // Debounced search state
   const [searchValue, setSearchValue] = useState("");
@@ -241,24 +241,12 @@ export default function Library() {
 
   // Event handlers
   const handleAddBook = async (bookData: InsertBook) => {
-    try {
-      await addBookMutation.mutateAsync(bookData);
-    } catch (error) {
-      console.error("Failed to add book:", error);
-      toast({ title: "Failed to add book", variant: "destructive" });
-    }
+    // This callback is called after the book has already been added by the dialog
+    // We don't need to add it again, just refresh the queries
+    console.log("Book added successfully:", bookData);
+    queryClient.invalidateQueries({ queryKey: ["/api/books"] });
   };
 
-  const handleBulkUpload = async (newBooks: InsertBook[]) => {
-    try {
-      for (const book of newBooks) {
-        await addBookMutation.mutateAsync(book);
-      }
-    } catch (error) {
-      console.error("Failed to bulk upload books:", error);
-      toast({ title: "Failed to upload books", variant: "destructive" });
-    }
-  };
 
   const handleStartReading = async (id: string) => {
     try {
@@ -468,10 +456,22 @@ export default function Library() {
               Export
             </Button>
           </ExportDialog>
-          <BulkUploadDialog onBulkUpload={handleBulkUpload} />
-          <AddBookDialog onAddBook={handleAddBook} />
+          <Button 
+            onClick={() => setIsAddBookOpen(true)} 
+            data-testid="button-add-book"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Book
+          </Button>
         </div>
       </div>
+
+      {/* Add Book Dialog */}
+      <AddBookDialog 
+        isOpen={isAddBookOpen} 
+        onOpenChange={setIsAddBookOpen} 
+        onAddBook={handleAddBook} 
+      />
 
       {/* Search and Filter Bar */}
       <div className="space-y-4">
@@ -653,7 +653,6 @@ export default function Library() {
                   </Button>
                 }
               />
-              <BulkUploadDialog onBulkUpload={handleBulkUpload} />
             </div>
             <p className="text-sm text-muted-foreground">
               Start building your reading collection. Scan ISBN codes, search by title/author, or bulk import your existing books.

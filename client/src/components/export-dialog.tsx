@@ -15,7 +15,6 @@ interface ExportDialogProps {
 
 interface ExportOptions {
   includeNotes: boolean;
-  includeTags: boolean;
   includeProgress: boolean;
   includeReadingSessions: boolean;
   format: 'csv' | 'json';
@@ -29,7 +28,6 @@ export function ExportDialog({ children }: ExportDialogProps) {
   
   const [options, setOptions] = useState<ExportOptions>({
     includeNotes: true,
-    includeTags: true,
     includeProgress: true,
     includeReadingSessions: false,
     format: 'csv',
@@ -76,21 +74,19 @@ export function ExportDialog({ children }: ExportDialogProps) {
 
   const exportCSV = async () => {
     const headers = [
-      'Title',
+      'Book Title',
       'Author',
-      'Genre',
-      'Status',
-      'Priority',
-      'Format',
+      'Medium',
+      'Type',
+      'Topic',
+      'How It Might Help Me',
       'Total Pages',
       'Current Page',
-      'Progress',
-      'Language',
-      'Added Date',
-      'Started Date',
-      'Completed Date',
-      'Last Read Date',
-      ...(options.includeTags ? ['Tags'] : []),
+      'Date Added',
+      'Reading Start Date',
+      'Completion Date',
+      'Status',
+      'Priority',
       ...(options.includeNotes ? ['Notes'] : []),
     ];
 
@@ -98,19 +94,17 @@ export function ExportDialog({ children }: ExportDialogProps) {
       const row = [
         book.title || '',
         book.author || '',
-        book.genre || '',
-        book.status || '',
-        book.priority?.toString() || '',
         book.format || '',
+        book.genre || '',
+        (book.topics || []).join('; '),
+        book.usefulness || '',
         book.totalPages?.toString() || '',
         book.currentPage?.toString() || '',
-        `${Math.round((book.progress || 0) * 100)}%`,
-        book.language || '',
         book.addedAt ? new Date(book.addedAt).toISOString().split('T')[0] : '',
         book.startedAt ? new Date(book.startedAt).toISOString().split('T')[0] : '',
         book.completedAt ? new Date(book.completedAt).toISOString().split('T')[0] : '',
-        book.lastReadAt ? new Date(book.lastReadAt).toISOString().split('T')[0] : '',
-        ...(options.includeTags ? [(book.tags || []).join('; ')] : []),
+        book.status || '',
+        book.priority?.toString() || '',
         ...(options.includeNotes ? [(book.notes || []).join('; ')] : []),
       ];
       
@@ -144,7 +138,6 @@ export function ExportDialog({ children }: ExportDialogProps) {
       startedAt: book.startedAt,
       completedAt: book.completedAt,
       lastReadAt: book.lastReadAt,
-      ...(options.includeTags && { tags: book.tags }),
       ...(options.includeNotes && { notes: book.notes }),
     }));
 
@@ -277,17 +270,6 @@ export function ExportDialog({ children }: ExportDialogProps) {
           <div>
             <Label className="text-base font-medium">Include Additional Data</Label>
             <div className="space-y-2 mt-2">
-              <div className="flex items-center space-x-2">
-                <Checkbox
-                  id="include-tags"
-                  checked={options.includeTags}
-                  onCheckedChange={(checked) => setOptions(prev => ({ ...prev, includeTags: !!checked }))}
-                  data-testid="checkbox-include-tags"
-                />
-                <Label htmlFor="include-tags" className="text-sm">
-                  Tags and topics
-                </Label>
-              </div>
               
               <div className="flex items-center space-x-2">
                 <Checkbox

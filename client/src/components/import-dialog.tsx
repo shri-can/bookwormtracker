@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Upload, FileText, AlertCircle, CheckCircle, X } from "lucide-react";
+import { Upload, FileText, AlertCircle, CheckCircle, X, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -29,6 +29,10 @@ interface ImportOptions {
   updateExisting: boolean;
   preserveProgress: boolean;
 }
+
+const csvTemplate = `Book Title,Author,Medium,Type,Topic,How It Might Help Me,Total Pages,Current Page,Date Added,Reading Start Date,Completion Date,Status,Priority
+"Clean Code","Robert C. Martin","paper","Programming","programming;clean-code","Writing better code",464,0,2024-01-15,2024-01-20,2024-02-15,finished,4
+"The Design of Everyday Things","Don Norman","paper","Design","design;ux;psychology","Learning UX principles",368,0,2024-01-10,,,toRead,3`;
 
 export function ImportDialog({ children }: ImportDialogProps) {
   const [open, setOpen] = useState(false);
@@ -76,14 +80,40 @@ export function ImportDialog({ children }: ImportDialogProps) {
         const cleanValue = value.replace(/^"|"$/g, '').replace(/""/g, '"');
         
         switch (header.toLowerCase()) {
+          case 'book title':
           case 'title':
             book.title = cleanValue;
             break;
           case 'author':
             book.author = cleanValue;
             break;
+          case 'medium':
+          case 'format':
+            book.format = cleanValue || 'paper';
+            break;
+          case 'type':
           case 'genre':
             book.genre = cleanValue || 'General Non-Fiction';
+            break;
+          case 'topic':
+          case 'topics':
+            book.topics = cleanValue ? cleanValue.split(';').map((t: string) => t.trim()).filter(Boolean) : [];
+            break;
+          case 'how it might help me':
+          case 'usefulness':
+            book.usefulness = cleanValue;
+            break;
+          case 'date added':
+          case 'addedat':
+            // This will be handled by the server as addedAt
+            break;
+          case 'reading start date':
+          case 'startedat':
+            book.startedAt = cleanValue ? new Date(cleanValue).toISOString() : undefined;
+            break;
+          case 'completion date':
+          case 'completedat':
+            book.completedAt = cleanValue ? new Date(cleanValue).toISOString() : undefined;
             break;
           case 'status':
             book.status = cleanValue || 'toRead';
@@ -91,12 +121,14 @@ export function ImportDialog({ children }: ImportDialogProps) {
           case 'priority':
             book.priority = parseInt(cleanValue) || 3;
             break;
-          case 'format':
-            book.format = cleanValue || 'paper';
-            break;
+          // Legacy field mappings for backward compatibility
           case 'total pages':
           case 'totalpages':
             book.totalPages = parseInt(cleanValue) || 0;
+            break;
+          case 'is currently reading':
+          case 'iscurrentlyreading':
+            book.isCurrentlyReading = cleanValue.toLowerCase() === 'true';
             break;
           case 'current page':
           case 'currentpage':
@@ -225,6 +257,22 @@ export function ImportDialog({ children }: ImportDialogProps) {
     }
   };
 
+  const downloadTemplate = () => {
+    const blob = new Blob([csvTemplate], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'book-import-template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast({
+      title: "Template downloaded",
+      description: "CSV template saved to your downloads",
+    });
+  };
+
   const resetDialog = () => {
     setFile(null);
     setPreview(null);
@@ -270,6 +318,20 @@ export function ImportDialog({ children }: ImportDialogProps) {
               <p className="text-sm text-muted-foreground mt-1">
                 Supported formats: CSV, JSON
               </p>
+              <div className="mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={downloadTemplate}
+                  data-testid="button-download-template"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download CSV Template
+                </Button>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Use the template to format your CSV file correctly
+                </p>
+              </div>
             </div>
           )}
 

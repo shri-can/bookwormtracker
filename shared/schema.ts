@@ -151,7 +151,7 @@ export const dailyBookTotals = pgTable("daily_book_totals", {
 // Define the fixed genre options
 export const BOOK_GENRES = [
   "Fiction",
-  "Self-Help / Personal Development", 
+  "Personal Development", 
   "Business / Finance",
   "Philosophy / Spirituality",
   "Psychology / Self-Improvement",

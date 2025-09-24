@@ -14,89 +14,62 @@ interface ProgressInputProps {
 }
 
 export function ProgressInput({ book, onPageUpdate, onCancel, onConfirm, isLoading }: ProgressInputProps) {
-  const [currentPage, setCurrentPage] = useState(book.currentPage || 0);
+  const [startPage, setStartPage] = useState(book.currentPage || 0);
+  const [endPage, setEndPage] = useState(book.currentPage || 0);
 
-  const handlePageChip = (increment: number) => {
-    const newPage = Math.max(0, currentPage + increment);
+  const handleEndPageChip = (increment: number) => {
+    const newPage = Math.max(startPage, endPage + increment);
     const maxPage = book.totalPages || 999999;
     const finalPage = Math.min(newPage, maxPage);
-    setCurrentPage(finalPage);
+    setEndPage(finalPage);
   };
 
-  const handleInputChange = (value: string) => {
+  const handleStartPageChange = (value: string) => {
     const newPage = parseInt(value) || 0;
     const maxPage = book.totalPages || 999999;
     const finalPage = Math.max(0, Math.min(newPage, maxPage));
-    setCurrentPage(finalPage);
+    setStartPage(finalPage);
+    // Auto-adjust end page if it's now less than start page
+    if (endPage < finalPage) {
+      setEndPage(finalPage);
+    }
+  };
+
+  const handleEndPageChange = (value: string) => {
+    const newPage = parseInt(value) || 0;
+    const maxPage = book.totalPages || 999999;
+    const finalPage = Math.max(startPage, Math.min(newPage, maxPage));
+    setEndPage(finalPage);
   };
 
   const handleConfirm = () => {
-    onConfirm(currentPage);
+    onConfirm(endPage);
   };
+
+  const pagesRead = Math.max(0, endPage - startPage);
 
   return (
     <Card className="border-dashed" data-testid="card-progress-input">
       <CardContent className="p-4 space-y-4">
         <div className="text-center">
-          <h4 className="font-medium mb-1">Update Your Progress</h4>
+          <h4 className="font-medium mb-1">Session Progress</h4>
           <p className="text-sm text-muted-foreground">
-            What page did you finish on?
+            What pages did you read in this session?
           </p>
         </div>
 
-        {/* Quick Page Chips */}
-        <div className="flex justify-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChip(-5)}
-            disabled={currentPage <= 0}
-            data-testid="button-minus-5"
-          >
-            <Minus className="h-3 w-3 mr-1" />
-            5
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChip(5)}
-            data-testid="button-plus-5"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            5
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChip(10)}
-            data-testid="button-plus-10"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            10
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePageChip(25)}
-            data-testid="button-plus-25"
-          >
-            <Plus className="h-3 w-3 mr-1" />
-            25
-          </Button>
-        </div>
-
-        {/* Current Page Input */}
+        {/* Start Page Input */}
         <div className="space-y-2">
+          <label className="text-sm font-medium text-muted-foreground">Start Page</label>
           <div className="flex items-center justify-center space-x-3">
-            <span className="text-sm text-muted-foreground">Page:</span>
             <Input
               type="number"
-              value={currentPage}
-              onChange={(e) => handleInputChange(e.target.value)}
+              value={startPage}
+              onChange={(e) => handleStartPageChange(e.target.value)}
               className="w-20 text-center"
               min={0}
               max={book.totalPages || undefined}
-              data-testid="input-current-page"
+              data-testid="input-start-page"
             />
             {book.totalPages && (
               <span className="text-sm text-muted-foreground">
@@ -104,9 +77,79 @@ export function ProgressInput({ book, onPageUpdate, onCancel, onConfirm, isLoadi
               </span>
             )}
           </div>
+        </div>
+
+        {/* End Page Input with Chips */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-muted-foreground">End Page</label>
+          
+          {/* Quick Page Chips */}
+          <div className="flex justify-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEndPageChip(-5)}
+              disabled={endPage <= startPage}
+              data-testid="button-minus-5"
+            >
+              <Minus className="h-3 w-3 mr-1" />
+              5
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEndPageChip(5)}
+              data-testid="button-plus-5"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              5
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEndPageChip(10)}
+              data-testid="button-plus-10"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              10
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleEndPageChip(25)}
+              data-testid="button-plus-25"
+            >
+              <Plus className="h-3 w-3 mr-1" />
+              25
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-center space-x-3">
+            <Input
+              type="number"
+              value={endPage}
+              onChange={(e) => handleEndPageChange(e.target.value)}
+              className="w-20 text-center"
+              min={startPage}
+              max={book.totalPages || undefined}
+              data-testid="input-end-page"
+            />
+            {book.totalPages && (
+              <span className="text-sm text-muted-foreground">
+                of {book.totalPages}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Pages Read Summary */}
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground">
+            Pages read: <span className="font-medium text-foreground">{pagesRead}</span>
+          </div>
           {book.totalPages && (
-            <div className="text-xs text-center text-muted-foreground">
-              {Math.round((currentPage / book.totalPages) * 100)}% complete
+            <div className="text-xs text-muted-foreground">
+              {Math.round((endPage / book.totalPages) * 100)}% complete
             </div>
           )}
         </div>
